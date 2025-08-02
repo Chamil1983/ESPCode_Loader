@@ -50,67 +50,143 @@ Public Class [Default]
     End Property
 
     Protected Sub Page_Load(sender As Object, e As EventArgs) Handles Me.Load
+        ' Critical fix: Always update the version info with current date and user
+        Dim currentDateTime = "2025-08-02 01:39:00"
+        Dim currentUser = "Chamil1983"
+        ScriptManager.RegisterStartupScript(Me, Me.GetType(), "updateVersionInfo", $"
+            document.addEventListener('DOMContentLoaded', function() {{
+                var versionElement = document.querySelector('.version-info');
+                if (versionElement) {{
+                    versionElement.innerHTML = 'ESP32 Arduino Web Loader v1.5.0 | Last Updated: {currentDateTime} | User: {currentUser}';
+                }}
+            }});
+        ", True)
+
         If Not IsPostBack Then
-            ' Set default boards.txt path
+            ' Clear session data for a clean start
+            Session("BoardConfigOptions") = Nothing
+            Session("OutputBuffer") = Nothing
+
+            ' First, try to load boards.txt
             If String.IsNullOrEmpty(txtBoardsTxtPath.Text) Then
                 txtBoardsTxtPath.Text = DEFAULT_BOARDS_TXT_PATH
-                ' Try to automatically load the boards.txt
                 If File.Exists(DEFAULT_BOARDS_TXT_PATH) Then
                     ImportBoardsTxtFromPath(DEFAULT_BOARDS_TXT_PATH)
                 End If
             End If
 
+            ' Load any custom partitions
             boardManager.LoadCustomPartitions()
-            PopulateBoards()
-            PopulatePartitions()
 
-            ' Set the default flash size to 4M for ESP32 (very important to prevent reset issues)
+            ' Populate boards dropdown first
+            PopulateBoards()
+
+            ' Set default board configurations
             SetDefaultBoardConfigurations(ddlBoard.SelectedValue)
 
-            ' Override specific settings for flash size
-            If BoardConfigOptions.ContainsKey("FlashSize") Then
-                BoardConfigOptions("FlashSize") = "4M"  ' Make sure flash size is 4MB
-            End If
-
-            ' Set flash mode to DIO based on boot log
-            If BoardConfigOptions.ContainsKey("FlashMode") Then
-                BoardConfigOptions("FlashMode") = "dio"  ' Boot log shows mode:DIO
-            End If
-
+            ' Populate partitions and serial ports
+            PopulatePartitions()
             PopulateSerialPorts()
+
+            ' EXPLICITLY set default partition scheme
+            If ddlPartition.Items.Count > 0 Then
+                ' Look for "default" item first
+                If ddlPartition.Items.FindByValue("default") IsNot Nothing Then
+                    ddlPartition.SelectedValue = "default"
+                    AppendToLog("Selected 'default' partition scheme")
+                Else
+                    ddlPartition.SelectedIndex = 0 ' Fallback to first item
+                    AppendToLog($"Default partition not found, selected: {ddlPartition.SelectedValue}")
+                End If
+            End If
+
+            ' Now populate board options
             PopulateBoardOptions()
 
-            ' Set default partition scheme to "min_spiffs" which is safer for 4MB flash
-            If ddlPartition.Items.FindByValue("min_spiffs") IsNot Nothing Then
-                ddlPartition.SelectedValue = "min_spiffs"  ' This partition scheme works better with 4MB flash
-            ElseIf ddlPartition.Items.Count > 0 Then
-                ddlPartition.SelectedIndex = 0 ' Select first partition as fallback
-            End If
-
+            ' Set the UI status
             txtOutput.Text = "Ready."
             lblStatus.Text = "<span class='status-indicator pending'><i class='fas fa-info-circle'></i> Status: Ready</span>"
+
+            ' Set CLI path if it exists in session
             If Not String.IsNullOrEmpty(ArduinoCliPath) Then
                 txtCliPath.Text = ArduinoCliPath
             End If
+
+            ' Update UI elements
             UpdatePartitionCount()
             ShowBoardsTxtStatus()
             ShowCustomPartitionStatus()
             UpdateFQBNPreview()
+        Else
+            ' This is crucial: re-populate the board options UI after postbacks
+            PopulateBoardOptions()
+            UpdatePartitionCount()
+            ShowBoardsTxtStatus()
+            ShowCustomPartitionStatus()
+
+            ' Update FQBN after UI is repopulated
+            ScriptManager.RegisterStartupScript(Me, Me.GetType(), "updateFQBNAfterPostback", "setTimeout(function() { updateFQBNPreview(); }, 500);", True)
         End If
+
+        ' Always register client scripts - for both initial load and postbacks
+        RegisterClientScripts()
+    End Sub
+
+    ' Register all client scripts needed for functionality
+    Private Sub RegisterClientScripts()
+        ' Register the stats initialization script
+        ScriptManager.RegisterStartupScript(Me, Me.GetType(), "StatsSetup", "
+            document.addEventListener('DOMContentLoaded', function() {
+                initializeStatsAndCharts();
+                setupBoardOptionListeners();
+                setupCompileTracking();
+            });
+        ", True)
+
+        ' Fix for board options listeners - runs after controls are fully rendered
+        ScriptManager.RegisterStartupScript(Me, Me.GetType(), "setupBoardOptions", "
+            setTimeout(function() {
+                console.log('Setting up board option listeners after delay');
+                setupBoardOptionListeners();
+                updateFQBNPreview();
+            }, 800);
+        ", True)
+
+        ' Debug script to help troubleshoot control rendering - FIXED QUOTES HERE
+        ScriptManager.RegisterStartupScript(Me, Me.GetType(), "debugControls", "
+            setTimeout(function() {
+                var optionDropdowns = document.querySelectorAll('[id^=""ddlOption_""]');
+                console.log('Found ' + optionDropdowns.length + ' board option dropdowns after delay');
+                
+                // Check if FQBN preview exists
+                var fqbnPreview = document.getElementById('fqbnPreview');
+                console.log('FQBN preview element exists: ' + (fqbnPreview ? 'Yes' : 'No'));
+                
+                // Check if stats panel exists
+                var statsPanel = document.getElementById('statsPanel');
+                console.log('Stats panel exists: ' + (statsPanel ? 'Yes' : 'No'));
+            }, 1000);
+        ", True)
     End Sub
 
     ' Import boards.txt from specified path
     Private Function ImportBoardsTxtFromPath(boardsTxtPath As String) As Boolean
         If File.Exists(boardsTxtPath) Then
-            ' Copy the boards.txt to server App_Data path
-            Dim appData = Server.MapPath("~/App_Data")
-            If Not Directory.Exists(appData) Then Directory.CreateDirectory(appData)
-            Dim destBoardsTxt = Path.Combine(appData, "boards.txt")
-            File.Copy(boardsTxtPath, destBoardsTxt, True)
+            Try
+                ' Copy the boards.txt to server App_Data path
+                Dim appData = Server.MapPath("~/App_Data")
+                If Not Directory.Exists(appData) Then Directory.CreateDirectory(appData)
+                Dim destBoardsTxt = Path.Combine(appData, "boards.txt")
+                File.Copy(boardsTxtPath, destBoardsTxt, True)
 
-            ' Import partition schemes and board options
-            Dim result = boardManager.ImportFromBoardsTxt(destBoardsTxt)
-            Return result.Success
+                ' Import partition schemes and board options
+                Dim result = boardManager.ImportFromBoardsTxt(destBoardsTxt)
+                Return result.Success
+            Catch ex As Exception
+                ' Log error for debugging
+                AppendToLog($"Error importing boards.txt: {ex.Message}")
+                Return False
+            End Try
         End If
         Return False
     End Function
@@ -118,19 +194,40 @@ Public Class [Default]
     ' Set defaults for board config options for given board
     Private Sub SetDefaultBoardConfigurations(boardName As String)
         BoardConfigOptions.Clear()
+
+        ' Get board options from manager
         Dim options = boardManager.GetBoardOptions(boardName)
-        If options IsNot Nothing Then
+
+        If options IsNot Nothing AndAlso options.Count > 0 Then
+            AppendToLog($"Found {options.Count} options for {boardName} in board manager")
             For Each opt In options
                 Dim def = boardManager.GetOptionDefault(boardName, opt.Key)
                 BoardConfigOptions(opt.Key) = def
+                AppendToLog($"Setting default for {opt.Key} = {def}")
             Next
+        Else
+            AppendToLog($"No options found for board {boardName} in board manager - creating default options")
+
+            ' Add default options even if none are found in board manager
+            BoardConfigOptions("FlashSize") = "4M"
+            BoardConfigOptions("FlashMode") = "dio"
+            BoardConfigOptions("FlashFreq") = "80"
+            BoardConfigOptions("CPUFreq") = "240"
+            BoardConfigOptions("UploadSpeed") = "921600"
         End If
 
-        ' Force specific settings that we know are correct for your hardware
-        BoardConfigOptions("FlashSize") = "4M"       ' Set flash size to 4MB
-        BoardConfigOptions("FlashMode") = "dio"      ' Set flash mode to DIO
+        ' Make sure these critical settings are always set
+        If Not BoardConfigOptions.ContainsKey("FlashSize") Then
+            BoardConfigOptions("FlashSize") = "4M"
+        End If
 
+        If Not BoardConfigOptions.ContainsKey("FlashMode") Then
+            BoardConfigOptions("FlashMode") = "dio"
+        End If
+
+        ' Store in session
         Session("BoardConfigOptions") = BoardConfigOptions
+        AppendToLog($"Saved {BoardConfigOptions.Count} board configuration options to session")
     End Sub
 
     Private Sub ShowBoardsTxtStatus()
@@ -204,6 +301,7 @@ Public Class [Default]
             End If
         Next
         ddlBoard.SelectedIndex = 0
+        AppendToLog($"Populated boards dropdown with {ddlBoard.Items.Count} items")
     End Sub
 
     Protected Sub ddlBoard_SelectedIndexChanged(sender As Object, e As EventArgs)
@@ -218,10 +316,14 @@ Public Class [Default]
         Dim currentSelection = If(ddlPartition.SelectedValue, "")
         ddlPartition.Items.Clear()
         Dim board As String = ddlBoard.SelectedValue
+
+        ' First add default partitions
         ddlPartition.Items.Add(New ListItem("Default", "default"))
         ddlPartition.Items.Add(New ListItem("Huge App", "huge_app"))
         ddlPartition.Items.Add(New ListItem("Minimal SPIFFS", "min_spiffs"))
         ddlPartition.Items.Add(New ListItem("No OTA", "no_ota"))
+
+        ' Add board-specific partition options
         Dim options = boardManager.GetPartitionOptions(board)
         For Each part In options
             If Not ddlPartition.Items.Contains(New ListItem(part, part)) Then
@@ -229,33 +331,58 @@ Public Class [Default]
             End If
         Next
 
-        ' Choose appropriate partition scheme for this device based on the flash size
+        AppendToLog($"Populated partition dropdown with {ddlPartition.Items.Count} items")
+
+        ' Choose appropriate partition scheme
         If Not String.IsNullOrEmpty(currentSelection) AndAlso ddlPartition.Items.FindByValue(currentSelection) IsNot Nothing Then
             ddlPartition.SelectedValue = currentSelection
+            AppendToLog($"Selected previous partition: {currentSelection}")
+        ElseIf ddlPartition.Items.FindByValue("default") IsNot Nothing Then
+            ' Use default as first choice
+            ddlPartition.SelectedValue = "default"
+            AppendToLog($"Selected default partition")
         ElseIf ddlPartition.Items.FindByValue("min_spiffs") IsNot Nothing Then
-            ' min_spiffs is generally safe for 4MB flash
+            ' Use min_spiffs for safer operation with 4MB flash as second choice
             ddlPartition.SelectedValue = "min_spiffs"
+            AppendToLog($"Selected min_spiffs partition")
         ElseIf HasCustomPartition AndAlso ddlPartition.Items.FindByValue("custom") IsNot Nothing Then
+            ' Custom partition if available
             ddlPartition.SelectedValue = "custom"
+            AppendToLog($"Selected custom partition")
         ElseIf ddlPartition.Items.Count > 0 Then
+            ' Default fallback to first item
             ddlPartition.SelectedIndex = 0
+            AppendToLog($"Selected first available partition: {ddlPartition.SelectedValue}")
         End If
 
         UpdatePartitionCount()
         ShowCustomPartitionStatus()
     End Sub
 
+    ' Improved PopulateBoardOptions with fixes for control rendering issues
     Private Sub PopulateBoardOptions()
         ' Clear the placeholder first
         plhBoardOptions.Controls.Clear()
 
         ' Get board name and options
         Dim boardName = ddlBoard.SelectedValue
-        If String.IsNullOrEmpty(boardName) Then Return
+        If String.IsNullOrEmpty(boardName) Then
+            AppendToLog("No board name selected")
+            Return
+        End If
 
         ' Get options for this board
         Dim options = boardManager.GetBoardOptions(boardName)
+
+        ' If no options found in board manager, create default options
         If options Is Nothing OrElse options.Count = 0 Then
+            AppendToLog($"No options found in board manager for board: {boardName} - creating default options")
+            options = CreateDefaultBoardOptions()
+        End If
+
+        ' Even after trying to create defaults, if still no options, show a message
+        If options Is Nothing OrElse options.Count = 0 Then
+            AppendToLog($"No options available for board: {boardName}")
             ' Create a message if no options available
             Dim noOptionsMsg As New System.Web.UI.HtmlControls.HtmlGenericControl("div")
             noOptionsMsg.Attributes("class") = "board-config-container"
@@ -264,12 +391,15 @@ Public Class [Default]
             Return
         End If
 
+        AppendToLog($"Found {options.Count} options for board: {boardName}")
+
         ' Store base FQBN
         hidBaseFQBN.Value = boardManager.GetFQBN(boardName, "", "")
 
         ' Create the container for all board options
         Dim configContainer As New System.Web.UI.HtmlControls.HtmlGenericControl("div")
         configContainer.Attributes("class") = "board-config-container"
+        configContainer.ID = "boardConfigContainer"
 
         ' Add heading
         Dim heading As New System.Web.UI.HtmlControls.HtmlGenericControl("h3")
@@ -286,7 +416,11 @@ Public Class [Default]
         ' Create option groups container
         Dim optionsContainer As New System.Web.UI.HtmlControls.HtmlGenericControl("div")
         optionsContainer.Attributes("class") = "board-options-grid"
+        optionsContainer.ID = "boardOptionsGrid"
         configContainer.Controls.Add(optionsContainer)
+
+        ' Log the number of options
+        AppendToLog($"Building UI for {options.Count} board options")
 
         ' Add each option to the container
         For Each optKvp As KeyValuePair(Of String, Dictionary(Of String, String)) In options
@@ -324,15 +458,21 @@ Public Class [Default]
             ' Create dropdown for option
             Dim dropdown As New System.Web.UI.WebControls.DropDownList()
             dropdown.ID = "ddlOption_" + optKvp.Key
-            dropdown.CssClass = "form-control"
+            dropdown.CssClass = "form-control board-option-dropdown"
             dropdown.ClientIDMode = System.Web.UI.ClientIDMode.Static
-            dropdown.Attributes("onchange") = "updateFQBNPreview();"
+            dropdown.Attributes("data-option-name") = optKvp.Key
+
+            ' FIXED: Add explicit onchange handler using client script
+            dropdown.Attributes("onchange") = "updateFQBNPreview(); console.log('Option changed: " + optKvp.Key + "');"
 
             ' Add default option
             dropdown.Items.Add(New ListItem("Default", "default"))
 
             ' Get default value for this option
             Dim defaultValue = boardManager.GetOptionDefault(boardName, optKvp.Key)
+
+            ' Log option details
+            AppendToLog($"Option: {optKvp.Key}, Default: {defaultValue}, Values: {optKvp.Value.Count}")
 
             ' Add options from the board manager
             For Each valueKvp As KeyValuePair(Of String, String) In optKvp.Value
@@ -346,25 +486,38 @@ Public Class [Default]
             Dim valueToSelect As String = "default"
             If BoardConfigOptions.ContainsKey(optKvp.Key) Then
                 valueToSelect = BoardConfigOptions(optKvp.Key)
+                AppendToLog($"Using stored value for {optKvp.Key}: {valueToSelect}")
             Else
                 valueToSelect = defaultValue
                 BoardConfigOptions(optKvp.Key) = defaultValue
+                AppendToLog($"Using default value for {optKvp.Key}: {valueToSelect}")
             End If
 
-            ' Special handling for Flash Size and Flash Mode based on boot log
+            ' Special handling for critical options
             If optKvp.Key = "FlashSize" Then
                 valueToSelect = "4M" ' Force 4MB flash size
+                AppendToLog($"Forcing Flash Size to 4M")
             ElseIf optKvp.Key = "FlashMode" Then
                 valueToSelect = "dio" ' Force DIO mode from boot log
+                AppendToLog($"Forcing Flash Mode to dio")
             End If
 
             ' Select the appropriate value in dropdown
             If dropdown.Items.FindByValue(valueToSelect) IsNot Nothing Then
                 dropdown.SelectedValue = valueToSelect
+                AppendToLog($"Selected value {valueToSelect} for {optKvp.Key}")
             Else
-                ' Fallback to default if the specific value isn't available
-                dropdown.SelectedValue = "default"
-                BoardConfigOptions(optKvp.Key) = "default"
+                ' If we can't find the value to select, try to find the default
+                If dropdown.Items.FindByValue(defaultValue) IsNot Nothing Then
+                    dropdown.SelectedValue = defaultValue
+                    BoardConfigOptions(optKvp.Key) = defaultValue
+                    AppendToLog($"Fallback to board default {defaultValue} for {optKvp.Key}")
+                Else
+                    ' As a last resort, select "default"
+                    dropdown.SelectedValue = "default"
+                    BoardConfigOptions(optKvp.Key) = "default"
+                    AppendToLog($"Fallback to 'default' for {optKvp.Key}")
+                End If
             End If
 
             optionContent.Controls.Add(dropdown)
@@ -384,6 +537,7 @@ Public Class [Default]
         Dim fqbnPreviewValue As New System.Web.UI.HtmlControls.HtmlGenericControl("div")
         fqbnPreviewValue.Attributes("class") = "fqbn-preview-value"
         fqbnPreviewValue.ID = "fqbnPreview"
+        fqbnPreviewValue.ClientIDMode = System.Web.UI.ClientIDMode.Static
 
         ' Generate FQBN with current board options
         Dim fullFQBN = boardManager.GetFQBN(boardName, ddlPartition.SelectedValue, "", BoardConfigOptions)
@@ -399,20 +553,112 @@ Public Class [Default]
 
         ' Also update hidFullFQBN to store the complete FQBN
         hidFullFQBN.Value = fullFQBN
+
+        ' Log completion of board options population
+        AppendToLog($"Board options UI populated with FQBN: {fullFQBN}")
     End Sub
 
-    ' Reads all board option dropdowns and updates BoardConfigOptions
+    ' Create default board options if none are available from board manager
+    Private Function CreateDefaultBoardOptions() As Dictionary(Of String, Dictionary(Of String, String))
+        Dim options As New Dictionary(Of String, Dictionary(Of String, String))
+
+        ' Create CPU Frequency options
+        Dim cpuFreq As New Dictionary(Of String, String)
+        cpuFreq.Add("240", "240MHz (WiFi/BT)")
+        cpuFreq.Add("160", "160MHz")
+        cpuFreq.Add("80", "80MHz")
+        options.Add("CPUFreq", cpuFreq)
+
+        ' Create Flash Frequency options
+        Dim flashFreq As New Dictionary(Of String, String)
+        flashFreq.Add("80", "80MHz")
+        flashFreq.Add("40", "40MHz")
+        options.Add("FlashFreq", flashFreq)
+
+        ' Create Flash Mode options
+        Dim flashMode As New Dictionary(Of String, String)
+        flashMode.Add("qio", "QIO")
+        flashMode.Add("dio", "DIO")
+        flashMode.Add("qout", "QOUT")
+        flashMode.Add("dout", "DOUT")
+        options.Add("FlashMode", flashMode)
+
+        ' Create Flash Size options
+        Dim flashSize As New Dictionary(Of String, String)
+        flashSize.Add("4M", "4MB (32Mb)")
+        flashSize.Add("2M", "2MB (16Mb)")
+        flashSize.Add("16M", "16MB (128Mb)")
+        options.Add("FlashSize", flashSize)
+
+        ' Create Upload Speed options
+        Dim uploadSpeed As New Dictionary(Of String, String)
+        uploadSpeed.Add("921600", "921600")
+        uploadSpeed.Add("115200", "115200")
+        uploadSpeed.Add("230400", "230400")
+        uploadSpeed.Add("512000", "512000")
+        options.Add("UploadSpeed", uploadSpeed)
+
+        ' Create Debug Level options
+        Dim debugLevel As New Dictionary(Of String, String)
+        debugLevel.Add("none", "None")
+        debugLevel.Add("error", "Error")
+        debugLevel.Add("warn", "Warning")
+        debugLevel.Add("info", "Info")
+        debugLevel.Add("debug", "Debug")
+        debugLevel.Add("verbose", "Verbose")
+        options.Add("DebugLevel", debugLevel)
+
+        ' Create PSRAM options
+        Dim psram As New Dictionary(Of String, String)
+        psram.Add("disabled", "Disabled")
+        psram.Add("enabled", "Enabled")
+        options.Add("PSRAM", psram)
+
+        AppendToLog("Created default board options")
+        Return options
+    End Function
+
+    ' Improved method to capture board options from UI
     Private Sub CaptureBoardOptionsFromUI()
         ' Create a new dictionary to avoid shared references
         Dim options As New Dictionary(Of String, String)
 
-        ' Process all dropdowns in the board options section
-        For Each ctrl As Control In plhBoardOptions.Controls
-            If TypeOf ctrl Is System.Web.UI.HtmlControls.HtmlGenericControl Then
-                Dim container = DirectCast(ctrl, System.Web.UI.HtmlControls.HtmlGenericControl)
-                FindAndProcessDropdowns(container, options)
+        Try
+            ' Process all dropdowns with class "board-option-dropdown"
+            Dim dropdowns = New List(Of DropDownList)()
+
+            ' Find all dropdowns recursively
+            FindDropdownControls(plhBoardOptions, dropdowns)
+
+            AppendToLog($"Found {dropdowns.Count} board option dropdowns")
+
+            ' Process each dropdown
+            For Each dropdown In dropdowns
+                If dropdown.ID IsNot Nothing AndAlso dropdown.ID.StartsWith("ddlOption_") Then
+                    Dim optionName = dropdown.ID.Replace("ddlOption_", "")
+                    options(optionName) = dropdown.SelectedValue
+                    AppendToLog($"Captured option: {optionName} = {dropdown.SelectedValue}")
+                End If
+            Next
+        Catch ex As Exception
+            AppendToLog($"Error capturing board options: {ex.Message}")
+        End Try
+
+        ' Check if we found any options
+        If options.Count = 0 Then
+            AppendToLog("WARNING: No options captured from UI")
+
+            ' Preserve existing options if we can't capture from UI
+            If BoardConfigOptions.Count > 0 Then
+                AppendToLog($"Using {BoardConfigOptions.Count} existing options from session")
+                Return ' Keep using existing BoardConfigOptions
+            Else
+                ' Add critical default options if nothing is available
+                AppendToLog("Adding critical default options")
+                options("FlashSize") = "4M"
+                options("FlashMode") = "dio"
             End If
-        Next
+        End If
 
         ' Always force these settings to prevent ESP32 reset issues
         options("FlashSize") = "4M"  ' Force 4MB flash size
@@ -423,6 +669,23 @@ Public Class [Default]
 
         ' Update session with the new values
         Session("BoardConfigOptions") = options
+
+        ' Log the options for debugging
+        AppendToLog($"Captured {options.Count} options from UI and stored in session")
+    End Sub
+
+    ' Helper method to find all DropDownList controls recursively
+    Private Sub FindDropdownControls(control As Control, dropdowns As List(Of DropDownList))
+        For Each childControl As Control In control.Controls
+            If TypeOf childControl Is DropDownList Then
+                dropdowns.Add(DirectCast(childControl, DropDownList))
+            End If
+
+            ' Recursively search in child controls
+            If childControl.HasControls() Then
+                FindDropdownControls(childControl, dropdowns)
+            End If
+        Next
     End Sub
 
     Protected Sub ddlPartition_SelectedIndexChanged(sender As Object, e As EventArgs)
@@ -432,32 +695,43 @@ Public Class [Default]
     End Sub
 
     Private Sub UpdateFQBNPreview()
-        ' Get current board and partition
-        Dim boardName = ddlBoard.SelectedValue
-        Dim partitionScheme = ddlPartition.SelectedValue
+        Try
+            ' Get current board and partition
+            Dim boardName = ddlBoard.SelectedValue
+            Dim partitionScheme = ddlPartition.SelectedValue
 
-        ' Capture current board options from UI
-        CaptureBoardOptionsFromUI()
+            ' Capture current board options from UI
+            CaptureBoardOptionsFromUI()
 
-        ' Generate FQBN with current settings
-        Dim fullFQBN = boardManager.GetFQBN(boardName, partitionScheme, "", BoardConfigOptions)
+            ' Generate FQBN with current settings
+            Dim fullFQBN = boardManager.GetFQBN(boardName, partitionScheme, "", BoardConfigOptions)
 
-        ' Update FQBN preview in UI
-        Dim fqbnPreview = FindControlRecursive(plhBoardOptions, "fqbnPreview")
-        If fqbnPreview IsNot Nothing AndAlso TypeOf fqbnPreview Is System.Web.UI.HtmlControls.HtmlGenericControl Then
-            DirectCast(fqbnPreview, System.Web.UI.HtmlControls.HtmlGenericControl).InnerText = fullFQBN
-        End If
+            ' Update FQBN preview in UI
+            Dim fqbnPreview = FindControlRecursive(plhBoardOptions, "fqbnPreview")
+            If fqbnPreview IsNot Nothing AndAlso TypeOf fqbnPreview Is System.Web.UI.HtmlControls.HtmlGenericControl Then
+                DirectCast(fqbnPreview, System.Web.UI.HtmlControls.HtmlGenericControl).InnerText = fullFQBN
+            End If
 
-        ' Update the hidden field for FQBN and literal
-        litFQBN.Text = fullFQBN
-        hidFullFQBN.Value = fullFQBN
+            ' Update the hidden field for FQBN and literal
+            litFQBN.Text = fullFQBN
+            hidFullFQBN.Value = fullFQBN
 
-        ' Update session with current board options
-        Session("BoardConfigOptions") = BoardConfigOptions
+            ' Also update client-side with JavaScript for redundancy
+            ScriptManager.RegisterStartupScript(Me, Me.GetType(), "updateFQBNDirectly", $"
+                if (document.getElementById('fqbnPreview')) {{
+                    document.getElementById('fqbnPreview').innerText = '{fullFQBN}';
+                }}
+            ", True)
 
-        ' Log the FQBN for debugging
-        Dim logEntry = $"Updated FQBN: {fullFQBN} with options: {String.Join(", ", BoardConfigOptions.Select(Function(kvp) $"{kvp.Key}={kvp.Value}"))}"
-        AppendToLog(logEntry)
+            ' Update session with current board options
+            Session("BoardConfigOptions") = BoardConfigOptions
+
+            ' Log the FQBN for debugging
+            Dim logEntry = $"Updated FQBN: {fullFQBN} with options: {String.Join(", ", BoardConfigOptions.Select(Function(kvp) $"{kvp.Key}={kvp.Value}"))}"
+            AppendToLog(logEntry)
+        Catch ex As Exception
+            AppendToLog($"Error updating FQBN preview: {ex.Message}")
+        End Try
     End Sub
 
     ' Log message to a file for debugging
@@ -472,21 +746,8 @@ Public Class [Default]
         End Try
     End Sub
 
-    Private Sub FindAndProcessDropdowns(container As Control, optionsDict As Dictionary(Of String, String))
-        For Each ctrl As Control In container.Controls
-            If TypeOf ctrl Is DropDownList Then
-                Dim dropdown = DirectCast(ctrl, DropDownList)
-                If dropdown.ID IsNot Nothing AndAlso dropdown.ID.StartsWith("ddlOption_") Then
-                    Dim optionName = dropdown.ID.Replace("ddlOption_", "")
-                    optionsDict(optionName) = dropdown.SelectedValue
-                End If
-            ElseIf ctrl.HasControls() Then
-                FindAndProcessDropdowns(ctrl, optionsDict)
-            End If
-        Next
-    End Sub
-
     Private Function FindControlRecursive(root As Control, id As String) As Control
+        If root Is Nothing Then Return Nothing
         If root.ID = id Then Return root
         For Each ctrl As Control In root.Controls
             Dim found = FindControlRecursive(ctrl, id)
@@ -594,32 +855,82 @@ Public Class [Default]
         AppendToLog($"Compiling with FQBN: {fqbn}")
 
         ' Clear output buffer and textbox
-        OutputBuffer = New List(Of String)()
+        Dim bufferList = OutputBuffer
+        bufferList.Clear()
         txtOutput.Text = ""
 
         ' Update status to indicate compilation started
         lblStatus.Text = "<span class='status-indicator pending'><i class='fas fa-spinner fa-spin'></i> Compiling...</span>"
 
         ' Show the FQBN being used in output
-        OutputBuffer.Add("Executing task: arduino-cli compile")
-        OutputBuffer.Add(String.Format("Using FQBN: {0}", fqbn))
-        txtOutput.Text = String.Join(Environment.NewLine, OutputBuffer)
+        bufferList.Add("Executing task: arduino-cli compile")
+        bufferList.Add(String.Format("Using FQBN: {0}", fqbn))
+        txtOutput.Text = String.Join(Environment.NewLine, bufferList)
+
+        ' Add JavaScript to record start time and reset the UI
+        ScriptManager.RegisterStartupScript(Me, Me.GetType(), "resetCompileUI", "
+            window.compileStartTime = Date.now(); 
+            console.log('Compilation started at ' + window.compileStartTime);
+            resetCompilationState();
+            resetAndStartProgress();
+        ", True)
 
         ' Run compile with real-time output
         Dim result As ArduinoUtil.ExecResult =
             ArduinoUtil.RunCompileRealtime(ArduinoCliPath, projDir, fqbn,
                 Sub(line)
-                    OutputBuffer.Add(line)
-                    txtOutput.Text = String.Join(Environment.NewLine, OutputBuffer)
+                    Dim bufferRef = OutputBuffer
+                    bufferRef.Add(line)
+                    txtOutput.Text = String.Join(Environment.NewLine, bufferRef)
                 End Sub)
 
         ' Update status based on result
         If result.Success Then
-            OutputBuffer.Add("Compiled OK")
+            Dim bufferRef = OutputBuffer
+            bufferRef.Add("Compiled OK")
             lblStatus.Text = "<span class='status-indicator success'><i class='fas fa-check-circle'></i> Compilation Successful</span>"
+
+            ' Add script to trigger statistics display - with retries for reliability
+            ScriptManager.RegisterStartupScript(Me, Me.GetType(), "showCompileStats", "
+                function tryProcessOutput(attempts) {
+                    console.log('Processing compilation output, attempt ' + attempts);
+                    if (attempts <= 0) return;
+                    
+                    try {
+                        var outputText = document.getElementById('txtOutput').value;
+                        if (outputText && outputText.includes('Compiled OK')) {
+                            processCompilationOutput(outputText);
+                            
+                            // Make sure stats panel is visible
+                            setTimeout(function() {
+                                var statsPanel = document.getElementById('statsPanel');
+                                if (statsPanel) {
+                                    statsPanel.style.display = 'block';
+                                    console.log('Stats panel displayed');
+                                }
+                            }, 100);
+                        } else {
+                            console.log('Output not ready or compilation not successful');
+                            setTimeout(function() { tryProcessOutput(attempts - 1); }, 500);
+                        }
+                    } catch (e) {
+                        console.error('Error processing output:', e);
+                        setTimeout(function() { tryProcessOutput(attempts - 1); }, 500);
+                    }
+                }
+                
+                // Try several times to ensure statistics are processed
+                setTimeout(function() { tryProcessOutput(5); }, 500);
+            ", True)
         Else
-            OutputBuffer.Add("Compile failed")
+            Dim bufferRef = OutputBuffer
+            bufferRef.Add("Compile failed")
             lblStatus.Text = "<span class='status-indicator error'><i class='fas fa-exclamation-circle'></i> Compilation Failed</span>"
+
+            ' Show failure notification
+            ScriptManager.RegisterStartupScript(Me, Me.GetType(), "compileFailed", "
+                showNotification('Compilation Failed', 'Check the output for errors.', 'error');
+            ", True)
         End If
 
         ' Update output text
@@ -682,32 +993,49 @@ Public Class [Default]
         AppendToLog($"Uploading with FQBN: {fqbn}")
 
         ' Clear output buffer and textbox
-        OutputBuffer = New List(Of String)()
+        Dim bufferList = OutputBuffer
+        bufferList.Clear()
         txtOutput.Text = ""
 
         ' Update status to indicate upload started
         lblStatus.Text = "<span class='status-indicator pending'><i class='fas fa-spinner fa-spin'></i> Uploading...</span>"
 
         ' Show the FQBN being used in output
-        OutputBuffer.Add("Executing task: arduino-cli compile")
-        OutputBuffer.Add(String.Format("Using FQBN: {0}", fqbn))
-        txtOutput.Text = String.Join(Environment.NewLine, OutputBuffer)
+        bufferList.Add("Executing task: arduino-cli compile")
+        bufferList.Add(String.Format("Using FQBN: {0}", fqbn))
+        txtOutput.Text = String.Join(Environment.NewLine, bufferList)
+
+        ' Also initialize progress tracking
+        ScriptManager.RegisterStartupScript(Me, Me.GetType(), "startUploadProgress", "resetAndStartProgress();", True)
 
         ' Run upload with real-time output
         Dim result As ArduinoUtil.ExecResult =
             ArduinoUtil.RunUploadRealtime(ArduinoCliPath, projDir, fqbn, serialPort,
                 Sub(line)
-                    OutputBuffer.Add(line)
-                    txtOutput.Text = String.Join(Environment.NewLine, OutputBuffer)
+                    Dim bufferRef = OutputBuffer
+                    bufferRef.Add(line)
+                    txtOutput.Text = String.Join(Environment.NewLine, bufferRef)
                 End Sub)
 
         ' Update status based on result
         If result.Success Then
-            OutputBuffer.Add("Upload OK")
+            Dim bufferRef = OutputBuffer
+            bufferRef.Add("Upload OK")
             lblStatus.Text = "<span class='status-indicator success'><i class='fas fa-check-circle'></i> Upload Successful</span>"
+
+            ' Add script to show success alert
+            ScriptManager.RegisterStartupScript(Me, Me.GetType(), "uploadSuccess", "
+                showNotification('Upload Successful', 'The sketch has been successfully uploaded to the ESP32 device.', 'success');
+            ", True)
         Else
-            OutputBuffer.Add("Upload failed")
+            Dim bufferRef = OutputBuffer
+            bufferRef.Add("Upload failed")
             lblStatus.Text = "<span class='status-indicator error'><i class='fas fa-exclamation-circle'></i> Upload Failed</span>"
+
+            ' Add script to show error alert
+            ScriptManager.RegisterStartupScript(Me, Me.GetType(), "uploadFailed", "
+                showNotification('Upload Failed', 'Failed to upload the sketch. Check the error message in the output.', 'error');
+            ", True)
         End If
 
         ' Update output text
@@ -766,6 +1094,7 @@ Public Class [Default]
         Try
             File.Delete(zipPath)
         Catch
+            ' Ignore errors on deletion
         End Try
     End Sub
 
@@ -861,6 +1190,9 @@ Public Class [Default]
         End If
 
         If result.Success Then
+            ' Reset board configuration options
+            BoardConfigOptions.Clear()
+
             ' Reload UI elements
             PopulatePartitions()
 

@@ -219,6 +219,15 @@
             background-color: #E34C26;
         }
         
+        .btn-info {
+            background-color: var(--info);
+            color: white;
+        }
+        
+        .btn-info:hover {
+            background-color: #0098B7;
+        }
+        
         .btn-sm {
             padding: 4px 10px;
             font-size: 12px;
@@ -724,6 +733,74 @@
             color: var(--gray-800);
             word-break: break-all;
         }
+        
+        /* Notification system */
+        .notifications-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 300px;
+            z-index: 9999;
+        }
+        
+        .notification {
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            align-items: flex-start;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .notification.success {
+            background-color: var(--success-light);
+            border-left: 4px solid var(--success);
+        }
+        
+        .notification.error {
+            background-color: var(--danger-light);
+            border-left: 4px solid var(--danger);
+        }
+        
+        .notification.info {
+            background-color: var(--info-light);
+            border-left: 4px solid var(--info);
+        }
+        
+        .notification-icon {
+            margin-right: 10px;
+            font-size: 18px;
+        }
+        
+        .notification-content {
+            flex: 1;
+        }
+        
+        .notification-title {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .notification-message {
+            font-size: 13px;
+        }
+        
+        .notification-close {
+            font-size: 16px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
     </style>
 </head>
 <body>
@@ -875,6 +952,9 @@
                                    OnClick="btnCompile_Click" OnClientClick="resetAndStartProgress(); return true;" />
                         <asp:Button ID="btnUpload" runat="server" Text="Upload" CssClass="btn btn-success" ClientIDMode="Static" 
                                    OnClick="btnUpload_Click" OnClientClick="resetAndStartProgress(); return true;" />
+                        <button type="button" ID="btnShowStats" class="btn btn-info" onclick="showSavedStats(); return false;">
+                            <i class="fas fa-chart-bar"></i> Show Stats
+                        </button>
                     </div>
                     
                     <!-- Progress bar -->
@@ -998,7 +1078,7 @@
                     <div class="form-group">
                         <label>Or upload boards.txt file:</label>
                         <div class="file-input-wrapper">
-                            <asp:FileUpload ID="fuBoardsTxt" runat="server" CssClass="file-input" accept=".txt" />
+                                                        <asp:FileUpload ID="fuBoardsTxt" runat="server" CssClass="file-input" accept=".txt" />
                             <span class="file-input-label">
                                 <i class="fas fa-file-alt"></i> Choose boards.txt
                             </span>
@@ -1013,10 +1093,19 @@
         </div>
         
         <div class="version-info">
-            ESP32 Arduino Web Loader v1.5.0 | Last Updated: 2025-07-31 23:54:39 | User: Chamil1983
+            ESP32 Arduino Web Loader v1.5.0 | Last Updated: 2025-08-02 01:35:37 | User: Chamil1983
         </div>
     </div>
+
+    <!-- Notifications container -->
+    <div id="notificationsContainer" class="notifications-container"></div>
     
+    <!-- Hidden fields for board configuration -->
+    <asp:HiddenField ID="hidBaseFQBN" runat="server" />
+    <asp:HiddenField ID="hidFullFQBN" runat="server" />
+    </form>
+
+    <!-- Main JavaScript -->
     <script type="text/javascript">
         // -------------------- CORE VARIABLES --------------------
         let compileActive = false;           // Flag to indicate active compilation
@@ -1029,6 +1118,7 @@
         let autoProgressTimer = null;        // Timer for auto-progress
         let outputCheckInterval = 50;        // Check output every 50ms for responsiveness
         let lastUpdateTime = 0;              // Last time progress was updated
+        let setupAttemptsRemaining = 5;      // Number of attempts for setting up board options
 
         // Progress tracking patterns - each represents a compilation phase
         const progressMarkers = [
@@ -1048,83 +1138,199 @@
         ];
 
         // -------------------- INITIALIZATION --------------------
-        // Document loaded - initialize everything
+        // Document loaded - initialize everything with retry
         document.addEventListener('DOMContentLoaded', function () {
-            debug("Document loaded");
-            initializeChart();
-            setupBoardOptionListeners();
+            debug("Document loaded - Enhanced script with retries");
+
+            // Initialize charts immediately
+            initializeStatsAndCharts();
+
+            // Setup with retry mechanism
+            setupWithRetry();
         });
 
-        // Set up event listeners for board option changes
-        function setupBoardOptionListeners() {
-            setTimeout(() => {
-                debug("Setting up board option listeners");
-                // Find all dropdowns in the board options section
-                const optionSelects = document.querySelectorAll('[id^=ddlOption_]');
+        // Setup with retry for better reliability
+        function setupWithRetry() {
+            if (setupAttemptsRemaining <= 0) {
+                debug("Gave up setting up board options after multiple attempts");
+                return;
+            }
 
+            setupAttemptsRemaining--;
+
+            try {
+                setupBoardOptionListeners();
+                setupCompileTracking();
+
+                // If this succeeds, we're done
+                debug("Setup completed successfully");
+            } catch (e) {
+                debug(`Setup attempt failed: ${e.message}, will retry in 500ms`);
+                setTimeout(setupWithRetry, 500);
+            }
+        }
+
+        // Set up event listeners for board option changes - with robust error handling
+        function setupBoardOptionListeners() {
+            try {
+                debug("Setting up board option listeners");
+
+                // First find all dropdowns directly
+                const optionSelects = document.querySelectorAll('[id^=ddlOption_]');
+                debug(`Found ${optionSelects.length} board option dropdowns directly`);
+
+                // Set up listeners for each dropdown
                 for (const select of optionSelects) {
                     select.addEventListener('change', function () {
                         debug(`Board option changed: ${select.id} = ${select.value}`);
                         updateFQBNPreview();
                     });
                 }
-                debug(`Set up listeners for ${optionSelects.length} board options`);
-            }, 500); // Small delay to ensure DOM is ready
+
+                // If none found, try again with a different approach
+                if (optionSelects.length === 0) {
+                    debug("No options found initially, trying alternative approach");
+                    // Try finding by class name
+                    const classSelects = document.querySelectorAll('.board-option-dropdown');
+                    debug(`Found ${classSelects.length} board option dropdowns by class`);
+
+                    for (const select of classSelects) {
+                        select.addEventListener('change', function () {
+                            debug(`Board option changed by class: ${select.id} = ${select.value}`);
+                            updateFQBNPreview();
+                        });
+                    }
+
+                    // If still none, we'll set up a mutation observer to catch dynamically added options
+                    if (classSelects.length === 0) {
+                        setupMutationObserver();
+                    }
+                }
+
+                // Also try to update FQBN preview now
+                setTimeout(updateFQBNPreview, 200);
+
+            } catch (e) {
+                debug(`Error setting up board option listeners: ${e.message}`);
+                // We'll retry via setupWithRetry
+            }
         }
 
-        // Update the FQBN preview based on selected options
-        function updateFQBNPreview() {
-            debug("Updating FQBN preview");
+        // Setup mutation observer to detect dynamically added board options
+        function setupMutationObserver() {
+            debug("Setting up mutation observer for dynamic board options");
 
-            // Get base board FQBN and partition
-            const board = document.getElementById('ddlBoard').value;
-            const partitionScheme = document.getElementById('ddlPartition').value;
-
-            // Collect all option values from dropdowns
-            const options = [];
-
-            // Add partition scheme if not default
-            if (partitionScheme && partitionScheme !== 'default') {
-                options.push(`PartitionScheme=${partitionScheme}`);
-            }
-
-            // Get all board option dropdowns
-            const optionDropdowns = document.querySelectorAll('[id^=ddlOption_]');
-
-            // Add each non-default option
-            for (const dropdown of optionDropdowns) {
-                if (dropdown.value && dropdown.value !== 'default') {
-                    const optionName = dropdown.id.replace('ddlOption_', '');
-                    options.push(`${optionName}=${dropdown.value}`);
-                }
-            }
-
-            // Find the preview element
-            const fqbnPreview = document.getElementById('fqbnPreview');
-            if (!fqbnPreview) {
-                debug("FQBN preview element not found");
+            const targetNode = document.getElementById('form1');
+            if (!targetNode) {
+                debug("No form1 element found for mutation observer");
                 return;
             }
 
-            // Get the base FQBN for this board
-            const baseFQBN = document.getElementById('hidBaseFQBN') ?
-                document.getElementById('hidBaseFQBN').value :
-                `esp32:esp32:${board}`;
+            const observer = new MutationObserver(function (mutations) {
+                for (const mutation of mutations) {
+                    if (mutation.type === 'childList') {
+                        const addedNodes = mutation.addedNodes;
+                        for (let i = 0; i < addedNodes.length; i++) {
+                            const node = addedNodes[i];
 
-            // Build the full FQBN
-            let fullFQBN = options.length > 0 ?
-                `${baseFQBN}:${options.join(',')}` :
-                baseFQBN;
+                            // Check if added node is or contains our board options
+                            if (node.querySelectorAll) {
+                                const options = node.querySelectorAll('[id^=ddlOption_], .board-option-dropdown');
+                                if (options.length > 0) {
+                                    debug(`Mutation observer found ${options.length} new board options`);
 
-            // Update the preview
-            fqbnPreview.textContent = fullFQBN;
+                                    // Set up listeners for these new options
+                                    for (const select of options) {
+                                        select.addEventListener('change', function () {
+                                            debug(`Dynamic board option changed: ${option.id} = ${option.value}`);
+                                            updateFQBNPreview();
+                                        });
+                                    }
 
-            debug(`Updated FQBN: ${fullFQBN}`);
+                                    // Try to update FQBN preview
+                                    setTimeout(updateFQBNPreview, 200);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
 
-            // Update hidden field if it exists
-            const hidFQBN = document.getElementById('hidFullFQBN');
-            if (hidFQBN) {
-                hidFQBN.value = fullFQBN;
+            observer.observe(targetNode, { childList: true, subtree: true });
+            debug("Mutation observer setup complete");
+        }
+
+        // Update the FQBN preview based on selected options - with enhanced error handling
+        function updateFQBNPreview() {
+            debug("Updating FQBN preview");
+
+            try {
+                // Get base board FQBN and partition
+                const board = document.getElementById('ddlBoard')?.value || "esp32";
+                const partitionScheme = document.getElementById('ddlPartition')?.value || "";
+
+                // Collect all option values from dropdowns
+                const options = [];
+
+                // Add partition scheme if not default
+                if (partitionScheme && partitionScheme !== 'default') {
+                    options.push(`PartitionScheme=${partitionScheme}`);
+                }
+
+                // Get all board option dropdowns - try multiple approaches
+                let optionDropdowns = document.querySelectorAll('[id^=ddlOption_]');
+                if (!optionDropdowns || optionDropdowns.length === 0) {
+                    optionDropdowns = document.querySelectorAll('.board-option-dropdown');
+                }
+
+                debug(`Found ${optionDropdowns.length} board option dropdowns for FQBN update`);
+
+                // Add each non-default option
+                for (const dropdown of optionDropdowns) {
+                    if (dropdown.value && dropdown.value !== 'default') {
+                        const optionName = dropdown.id.replace('ddlOption_', '');
+                        options.push(`${optionName}=${dropdown.value}`);
+                    }
+                }
+
+                // Find the preview element using multiple approaches
+                let fqbnPreview = document.getElementById('fqbnPreview');
+                if (!fqbnPreview) {
+                    // Try to find by class
+                    fqbnPreview = document.querySelector('.fqbn-preview-value');
+                    debug("FQBN preview element found by class: " + (fqbnPreview ? "Yes" : "No"));
+                }
+
+                // Get the base FQBN for this board - with fallback
+                const baseFQBN = document.getElementById('hidBaseFQBN')?.value ||
+                    `esp32:esp32:${board}`;
+
+                // Build the full FQBN
+                let fullFQBN = options.length > 0 ?
+                    `${baseFQBN}:${options.join(',')}` :
+                    baseFQBN;
+
+                debug(`Generated FQBN: ${fullFQBN}`);
+
+                // Update the preview if found
+                if (fqbnPreview) {
+                    fqbnPreview.textContent = fullFQBN;
+                    debug("Updated FQBN preview element");
+                } else {
+                    debug("FQBN preview element not found for update");
+                }
+
+                // Update hidden field if it exists
+                const hidFQBN = document.getElementById('hidFullFQBN');
+                if (hidFQBN) {
+                    hidFQBN.value = fullFQBN;
+                    debug("Updated hidden FQBN field");
+                }
+
+                return true;
+            } catch (e) {
+                debug(`Error updating FQBN preview: ${e.message}`);
+                return false;
             }
         }
 
@@ -1143,8 +1349,18 @@
 
             // Reset UI elements
             setProgressUI(0, "Starting...");
-            document.getElementById('debugProgress').innerHTML = "";
-            document.getElementById('statsPanel').style.display = 'none';
+
+            // Clear debug panel
+            const debugPanel = document.getElementById('debugProgress');
+            if (debugPanel) {
+                debugPanel.innerHTML = "";
+            }
+
+            // Hide stats panel
+            const statsPanel = document.getElementById('statsPanel');
+            if (statsPanel) {
+                statsPanel.style.display = 'none';
+            }
 
             // Clear any existing timers
             if (progressUpdateTimer) clearInterval(progressUpdateTimer);
@@ -1240,7 +1456,7 @@
             }
         }
 
-        // Handle a completed operation (success or failure)
+        // Handle a completed operation (success or failure) with retry for statistics
         function handleCompletedOperation(outputText, success) {
             debug(`Operation ${success ? "succeeded" : "failed"}`);
 
@@ -1258,131 +1474,341 @@
             // Update the UI to 100%
             setProgressUI(100, success ? "Complete!" : "Failed");
 
-            // If successful, show the statistics
-            if (success) {
-                // Small delay to ensure output is fully processed
+            // If successful, show the statistics with retry
+            if (success && outputText.includes("Compiled OK")) {
+                // Initial attempt with delay
                 setTimeout(() => {
-                    extractAndShowStats(outputText);
+                    debug("First attempt to process compilation output");
+                    if (!processCompilationOutput(outputText)) {
+                        // If first attempt fails, try again
+                        debug("First attempt failed, will retry statistics processing");
+                        setTimeout(() => {
+                            processCompilationOutput(outputText, true);
+                        }, 1000);
+                    }
                 }, 500);
             }
         }
 
+        // Set up compile button tracking
+        function setupCompileTracking() {
+            try {
+                // Set up compile button listener
+                const compileBtn = document.getElementById('btnCompile');
+                if (compileBtn) {
+                    debug("Setting up compile button tracking");
+
+                    compileBtn.addEventListener('click', function () {
+                        window.compileStartTime = Date.now();
+                        debug('Compilation started at: ' + new Date(window.compileStartTime).toLocaleTimeString());
+
+                        // Reset UI state for new compilation
+                        resetCompilationState();
+                    });
+                } else {
+                    debug("Compile button not found");
+                }
+
+                // Similarly for upload button
+                const uploadBtn = document.getElementById('btnUpload');
+                if (uploadBtn) {
+                    debug("Setting up upload button tracking");
+
+                    uploadBtn.addEventListener('click', function () {
+                        window.compileStartTime = Date.now();
+                        debug('Upload started at: ' + new Date(window.compileStartTime).toLocaleTimeString());
+
+                        // Reset UI state for new operation
+                        resetCompilationState();
+                    });
+                }
+            } catch (e) {
+                debug(`Error setting up compile tracking: ${e.message}`);
+            }
+        }
+
+        // Reset the compilation state
+        function resetCompilationState() {
+            try {
+                debug("Resetting compilation state");
+
+                // Hide stats panel
+                const statsPanel = document.getElementById('statsPanel');
+                if (statsPanel) {
+                    statsPanel.style.display = 'none';
+                    debug("Stats panel hidden");
+                }
+
+                // Reset stats values
+                if (document.getElementById('statSketchSize')) document.getElementById('statSketchSize').innerText = '--';
+                if (document.getElementById('statFlashUsage')) document.getElementById('statFlashUsage').innerText = '--';
+                if (document.getElementById('statRamUsage')) document.getElementById('statRamUsage').innerText = '--';
+                if (document.getElementById('statCompileTime')) document.getElementById('statCompileTime').innerText = '--';
+
+                // Reset chart if it exists
+                if (window.statsChart) {
+                    window.statsChart.data.datasets[0].data = [0, 0, 0];
+                    window.statsChart.update();
+                    debug("Chart reset");
+                } else {
+                    debug("Chart not initialized, will initialize now");
+                    initializeStatsAndCharts();
+                }
+            } catch (e) {
+                debug(`Error resetting compilation state: ${e.message}`);
+            }
+        }
+
         // -------------------- STATISTICS HANDLING --------------------
-        // Extract statistics from output and show the stats panel
-        function extractAndShowStats(output) {
-            debug("Extracting statistics from output");
+        // Initialize statistics and charts
+        function initializeStatsAndCharts() {
+            try {
+                debug("Initializing stats and charts");
 
-            // Calculate compilation duration
-            const compileDuration = ((Date.now() - compileStartTime) / 1000).toFixed(1);
+                // Create an empty chart to be populated later
+                const ctx = document.getElementById('compilationStatsChart');
+                if (ctx) {
+                    // Check if Chart.js is loaded
+                    if (typeof Chart === 'undefined') {
+                        debug("ERROR: Chart.js not loaded! Charts will not work.");
+                        return false;
+                    }
 
-            // Extract statistics using regular expressions
-            const sketchSize = extractWithPattern(output, /Sketch uses (\d+,?\d*) bytes/, "--");
-            const flashUsage = extractWithPattern(output, /\((\d+\.?\d*%)\) of program storage space/, "--");
-            const ramUsage = extractWithPattern(output, /Global variables use (\d+,?\d*) bytes/, "--");
-
-            debug(`Stats - Size: ${sketchSize}, Flash: ${flashUsage}, RAM: ${ramUsage}, Time: ${compileDuration}s`);
-
-            // Update the statistics UI
-            document.getElementById('statSketchSize').innerText = sketchSize + " bytes";
-            document.getElementById('statFlashUsage').innerText = flashUsage;
-            document.getElementById('statRamUsage').innerText = ramUsage;
-            document.getElementById('statCompileTime').innerText = compileDuration + " sec";
-
-            // Update the chart
-            updateStatsChart(sketchSize, flashUsage, ramUsage);
-
-            // Show the statistics panel with animation
-            var statsPanel = document.getElementById('statsPanel');
-            statsPanel.style.display = 'block';
-
-            // Scroll to make the statistics visible
-            setTimeout(function () {
-                statsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }, 200);
-
-            debug("Statistics panel displayed");
+                    try {
+                        window.statsChart = new Chart(ctx, {
+                            type: 'bar',
+                            data: {
+                                labels: ['Sketch Size (KB)', 'Flash Usage (%)', 'RAM Usage (KB)'],
+                                datasets: [{
+                                    label: 'Compilation Statistics',
+                                    data: [0, 0, 0],
+                                    backgroundColor: [
+                                        'rgba(54, 162, 235, 0.7)',
+                                        'rgba(255, 99, 132, 0.7)',
+                                        'rgba(75, 192, 192, 0.7)'
+                                    ],
+                                    borderColor: [
+                                        'rgba(54, 162, 235, 1)',
+                                        'rgba(255, 99, 132, 1)',
+                                        'rgba(75, 192, 192, 1)'
+                                    ],
+                                    borderWidth: 1
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                scales: {
+                                    y: {
+                                        beginAtZero: true
+                                    }
+                                },
+                                plugins: {
+                                    legend: {
+                                        display: false
+                                    }
+                                }
+                            }
+                        });
+                        debug("Chart initialized successfully");
+                        return true;
+                    } catch (chartError) {
+                        debug(`Error creating chart: ${chartError.message}`);
+                        return false;
+                    }
+                } else {
+                    debug("Chart canvas element not found");
+                    return false;
+                }
+            } catch (e) {
+                debug(`Error initializing stats and charts: ${e.message}`);
+                return false;
+            }
         }
 
-        // Extract value using regex pattern
-        function extractWithPattern(text, pattern, defaultValue) {
-            const match = text.match(pattern);
-            return match ? match[1] : defaultValue;
-        }
+        // Process the compilation output to extract statistics
+        // Returns true if successful, false if failed
+        function processCompilationOutput(outputText, isRetry = false) {
+            debug(`Processing compilation output${isRetry ? " (retry attempt)" : ""}`);
 
-        // Update the statistics chart
-        function updateStatsChart(sketchSize, flashUsage, ramUsage) {
-            if (!statsChart) {
-                debug("Chart not initialized, creating new chart");
-                initializeChart();
+            if (!outputText) {
+                debug("No output text to process");
+                return false;
+            }
+
+            // Check if compilation was successful
+            if (outputText.indexOf('Compiled OK') === -1) {
+                debug("Compilation was not successful");
+                return false;
             }
 
             try {
-                // Parse the values for the chart
-                let sketchSizeKB = parseFloat((parseInt(sketchSize.replace(/,/g, '')) / 1024).toFixed(2));
-                if (isNaN(sketchSizeKB)) sketchSizeKB = 0;
+                // Regular expressions to match statistics in the output
+                const sketchSizeRegex = /Sketch uses ([0-9,]+) bytes/;
+                const flashUsageRegex = /\(([0-9.]+)%\)/;
+                const ramUsageRegex = /Global variables use ([0-9,]+) bytes/;
 
-                let flashUsagePercent = parseFloat(flashUsage.replace('%', ''));
-                if (isNaN(flashUsagePercent)) flashUsagePercent = 0;
+                // Extract values using regex
+                const sketchSizeMatch = sketchSizeRegex.exec(outputText);
+                const flashUsageMatch = flashUsageRegex.exec(outputText);
+                const ramUsageMatch = ramUsageRegex.exec(outputText);
 
-                let ramUsageKB = parseFloat((parseInt(ramUsage.replace(/,/g, '').replace(' bytes', '')) / 1024).toFixed(2));
-                if (isNaN(ramUsageKB)) ramUsageKB = 0;
+                debug("Stats matches: " +
+                    (sketchSizeMatch ? sketchSizeMatch[1] : "not found") + ", " +
+                    (flashUsageMatch ? flashUsageMatch[1] : "not found") + ", " +
+                    (ramUsageMatch ? ramUsageMatch[1] : "not found"));
 
-                // Update the chart data
-                statsChart.data.datasets[0].data = [sketchSizeKB, flashUsagePercent, ramUsageKB];
-                statsChart.update();
+                // Get the values or use placeholders
+                const sketchSize = sketchSizeMatch ? sketchSizeMatch[1] + " bytes" : "N/A";
+                const flashUsage = flashUsageMatch ? flashUsageMatch[1] + "%" : "N/A";
+                const ramUsage = ramUsageMatch ? ramUsageMatch[1] + " bytes" : "N/A";
 
-                debug(`Chart updated: [${sketchSizeKB}KB, ${flashUsagePercent}%, ${ramUsageKB}KB]`);
-            } catch (error) {
-                debug(`Error updating chart: ${error.message}`);
+                // Calculate compilation time
+                const compileDuration = ((Date.now() - (window.compileStartTime || Date.now())) / 1000).toFixed(1);
+                const compileTime = compileDuration + " sec";
+
+                // Update the stats UI
+                const sketchSizeElem = document.getElementById('statSketchSize');
+                const flashUsageElem = document.getElementById('statFlashUsage');
+                const ramUsageElem = document.getElementById('statRamUsage');
+                const compileTimeElem = document.getElementById('statCompileTime');
+
+                if (sketchSizeElem) sketchSizeElem.innerText = sketchSize;
+                if (flashUsageElem) flashUsageElem.innerText = flashUsage;
+                if (ramUsageElem) ramUsageElem.innerText = ramUsage;
+                if (compileTimeElem) compileTimeElem.innerText = compileTime;
+
+                // Parse numeric values for the chart
+                let sketchSizeKB = 0;
+                let flashUsagePercent = 0;
+                let ramUsageKB = 0;
+
+                try {
+                    if (sketchSizeMatch) {
+                        sketchSizeKB = parseFloat(sketchSizeMatch[1].replace(/,/g, '')) / 1024;
+                    }
+                    if (flashUsageMatch) {
+                        flashUsagePercent = parseFloat(flashUsageMatch[1]);
+                    }
+                    if (ramUsageMatch) {
+                        ramUsageKB = parseFloat(ramUsageMatch[1].replace(/,/g, '')) / 1024;
+                    }
+
+                    // Update the chart with the new values
+                    if (window.statsChart) {
+                        window.statsChart.data.datasets[0].data = [sketchSizeKB, flashUsagePercent, ramUsageKB];
+                        window.statsChart.update();
+                        debug("Chart updated with new values");
+                    } else {
+                        debug("Chart not available, trying to initialize");
+                        initializeStatsAndCharts();
+                    }
+
+                    // SAVE STATS TO SESSION STORAGE
+                    const statsData = {
+                        sketchSize: sketchSize,
+                        flashUsage: flashUsage,
+                        ramUsage: ramUsage,
+                        compileTime: compileTime,
+                        sketchSizeKB: sketchSizeKB,
+                        flashUsagePercent: flashUsagePercent,
+                        ramUsageKB: ramUsageKB,
+                        timestamp: new Date().toISOString()
+                    };
+
+                    try {
+                        sessionStorage.setItem('compilationStats', JSON.stringify(statsData));
+                        debug("Saved compilation stats to session storage");
+                    } catch (storageError) {
+                        debug(`Error saving stats to session storage: ${storageError.message}`);
+                    }
+
+                } catch (e) {
+                    debug(`Error updating chart: ${e.message}`);
+                }
+
+                // Show the statistics panel with animation
+                const statsPanel = document.getElementById('statsPanel');
+                if (statsPanel) {
+                    statsPanel.style.display = 'block';
+                    debug("Statistics panel displayed");
+
+                    // Scroll to the stats panel with smooth animation
+                    setTimeout(function () {
+                        statsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 300);
+                } else {
+                    debug("ERROR: Statistics panel element not found!");
+                }
+
+                return true;
+
+            } catch (e) {
+                debug(`Error processing compilation output: ${e.message}`);
+                return false;
             }
         }
 
-        // Initialize the chart
-        function initializeChart() {
-            debug("Initializing chart");
-            const ctx = document.getElementById('compilationStatsChart');
-            if (!ctx) {
-                debug("Chart canvas not found!");
-                return;
+        // NEW FUNCTION: Show saved statistics without compilation
+        function showSavedStats() {
+            debug("Attempting to show saved statistics");
+
+            // Get the saved stats from session storage if available
+            let savedStats = null;
+            try {
+                const statsJson = sessionStorage.getItem('compilationStats');
+                if (statsJson) {
+                    savedStats = JSON.parse(statsJson);
+                    debug("Retrieved saved stats from session storage");
+                } else {
+                    debug("No saved stats found in session storage");
+                    showNotification('No Statistics Available', 'Compile your sketch first to generate statistics.', 'info');
+                    return false;
+                }
+            } catch (e) {
+                debug(`Error retrieving saved stats: ${e.message}`);
+                showNotification('Error', 'Could not retrieve saved statistics.', 'error');
+                return false;
             }
 
-            statsChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['Sketch Size (KB)', 'Flash Usage (%)', 'RAM Usage (KB)'],
-                    datasets: [{
-                        label: 'Compilation Statistics',
-                        data: [0, 0, 0],
-                        backgroundColor: [
-                            'rgba(54, 162, 235, 0.7)',  // Blue
-                            'rgba(255, 99, 132, 0.7)',  // Red
-                            'rgba(75, 192, 192, 0.7)'   // Green
-                        ],
-                        borderColor: [
-                            'rgba(54, 162, 235, 1)',
-                            'rgba(255, 99, 132, 1)',
-                            'rgba(75, 192, 192, 1)'
-                        ],
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    }
-                }
-            });
+            // If we have valid stats, display them
+            if (savedStats && savedStats.sketchSize) {
+                debug("Displaying saved statistics");
 
-            debug("Chart initialized");
+                // Update the stats UI
+                if (document.getElementById('statSketchSize')) document.getElementById('statSketchSize').innerText = savedStats.sketchSize;
+                if (document.getElementById('statFlashUsage')) document.getElementById('statFlashUsage').innerText = savedStats.flashUsage;
+                if (document.getElementById('statRamUsage')) document.getElementById('statRamUsage').innerText = savedStats.ramUsage;
+                if (document.getElementById('statCompileTime')) document.getElementById('statCompileTime').innerText = savedStats.compileTime;
+
+                // Update the chart
+                if (window.statsChart) {
+                    window.statsChart.data.datasets[0].data = [
+                        savedStats.sketchSizeKB || 0,
+                        savedStats.flashUsagePercent || 0,
+                        savedStats.ramUsageKB || 0
+                    ];
+                    window.statsChart.update();
+                    debug("Chart updated with saved data");
+                }
+
+                // Show the statistics panel with animation
+                const statsPanel = document.getElementById('statsPanel');
+                if (statsPanel) {
+                    statsPanel.style.display = 'block';
+                    debug("Statistics panel displayed");
+
+                    // Scroll to the stats panel with smooth animation
+                    setTimeout(function () {
+                        statsPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 300);
+
+                    showNotification('Statistics Loaded', 'Showing saved compilation statistics.', 'info');
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         // -------------------- UTILITY FUNCTIONS --------------------
@@ -1409,42 +1835,122 @@
 
         // Show the selected statistics tab
         function showStatTab(tabId) {
-            // Hide all tabs
-            const tabs = document.querySelectorAll('.stat-tabs-content > div');
-            tabs.forEach(tab => tab.classList.remove('active'));
+            try {
+                // Hide all tabs
+                const tabs = document.querySelectorAll('.stat-tabs-content > div');
+                tabs.forEach(tab => tab.classList.remove('active'));
 
-            // Deactivate all buttons
-            const buttons = document.querySelectorAll('.stat-tab');
-            buttons.forEach(button => button.classList.remove('active'));
+                // Deactivate all buttons
+                const buttons = document.querySelectorAll('.stat-tab');
+                buttons.forEach(button => button.classList.remove('active'));
 
-            // Show selected tab
-            document.getElementById(tabId).classList.add('active');
+                // Show selected tab
+                const selectedTab = document.getElementById(tabId);
+                if (selectedTab) {
+                    selectedTab.classList.add('active');
+                }
 
-            // Activate button
-            const button = document.querySelector(`.stat-tab[data-tab="${tabId}"]`);
-            if (button) button.classList.add('active');
+                // Activate button
+                const button = document.querySelector(`.stat-tab[data-tab="${tabId}"]`);
+                if (button) button.classList.add('active');
 
-            // Resize chart if needed
-            if (tabId === 'chartTab' && statsChart) {
-                statsChart.resize();
+                // Resize chart if needed
+                if (tabId === 'chartTab' && window.statsChart) {
+                    try {
+                        window.statsChart.resize();
+                        debug("Chart resized for display");
+                    } catch (e) {
+                        debug(`Error resizing chart: ${e.message}`);
+                    }
+                }
+            } catch (e) {
+                debug(`Error switching statistic tabs: ${e.message}`);
             }
         }
 
         // Show the selected main tab
         function showTab(tabId) {
-            // Hide all tabs
-            const tabs = document.querySelectorAll('.tab-content');
-            tabs.forEach(tab => tab.classList.remove('active'));
+            try {
+                // Hide all tabs
+                const tabs = document.querySelectorAll('.tab-content');
+                tabs.forEach(tab => tab.classList.remove('active'));
 
-            // Deactivate all buttons
-            const buttons = document.querySelectorAll('.tab-btn');
-            buttons.forEach(button => button.classList.remove('active'));
+                // Deactivate all buttons
+                const buttons = document.querySelectorAll('.tab-btn');
+                buttons.forEach(button => button.classList.remove('active'));
 
-            // Show selected tab
-            document.getElementById(tabId).classList.add('active');
+                // Show selected tab
+                const selectedTab = document.getElementById(tabId);
+                if (selectedTab) {
+                    selectedTab.classList.add('active');
+                }
 
-            // Activate button
-            document.getElementById('btn-' + tabId).classList.add('active');
+                // Activate button
+                const button = document.getElementById('btn-' + tabId);
+                if (button) {
+                    button.classList.add('active');
+                }
+            } catch (e) {
+                debug(`Error switching main tabs: ${e.message}`);
+            }
+        }
+
+        // Show notification
+        function showNotification(title, message, type = 'info') {
+            try {
+                const container = document.getElementById('notificationsContainer');
+                if (!container) {
+                    debug("Notification container not found");
+                    return;
+                }
+
+                const notification = document.createElement('div');
+                notification.className = `notification ${type}`;
+
+                let iconClass = 'fa-info-circle';
+                if (type === 'success') iconClass = 'fa-check-circle';
+                if (type === 'error') iconClass = 'fa-exclamation-circle';
+
+                notification.innerHTML = `
+                    <div class="notification-icon">
+                        <i class="fas ${iconClass}"></i>
+                    </div>
+                    <div class="notification-content">
+                        <div class="notification-title">${title}</div>
+                        <div class="notification-message">${message}</div>
+                    </div>
+                    <div class="notification-close" onclick="this.parentElement.remove()">
+                        <i class="fas fa-times"></i>
+                    </div>
+                `;
+
+                container.appendChild(notification);
+                debug(`Showed ${type} notification: ${title}`);
+
+                // Auto-remove after 5 seconds
+                setTimeout(() => {
+                    notification.style.animation = 'slideOut 0.3s ease-out forwards';
+                    setTimeout(() => {
+                        if (notification.parentNode) {
+                            notification.parentNode.removeChild(notification);
+                        }
+                    }, 300);
+                }, 5000);
+            } catch (e) {
+                debug(`Error showing notification: ${e.message}`);
+            }
+        }
+
+        // Update the version info in the UI
+        function updateVersionInfo() {
+            try {
+                const versionElement = document.querySelector('.version-info');
+                if (versionElement) {
+                    versionElement.innerHTML = 'ESP32 Arduino Web Loader v1.5.0 | Last Updated: 2025-08-02 01:35:37 | User: Chamil1983';
+                }
+            } catch (e) {
+                debug(`Error updating version info: ${e.message}`);
+            }
         }
 
         // Setup a backup polling for changes if MutationObserver doesn't work
@@ -1454,11 +1960,32 @@
                 checkForOutputChanges();
             }
         }, 100);
+
+        // Call updateVersionInfo once on page load to ensure date is current
+        updateVersionInfo();
+
+        // Set up periodic check for DOM readiness and board options
+        setInterval(function () {
+            // If there are board options but no listeners, set them up
+            const options = document.querySelectorAll('[id^=ddlOption_], .board-option-dropdown');
+            if (options.length > 0) {
+                const hasListener = options[0].getAttribute('data-has-listener') === 'true';
+
+                if (!hasListener) {
+                    debug(`Found ${options.length} board options without listeners, setting them up`);
+                    for (const option of options) {
+                        option.addEventListener('change', function () {
+                            debug(`Board option changed: ${option.id} = ${option.value}`);
+                            updateFQBNPreview();
+                        });
+                        option.setAttribute('data-has-listener', 'true');
+                    }
+
+                    // Update FQBN preview now that we have options
+                    updateFQBNPreview();
+                }
+            }
+        }, 2000);
     </script>
-    
-    <!-- Hidden fields for board configuration -->
-    <asp:HiddenField ID="hidBaseFQBN" runat="server" />
-    <asp:HiddenField ID="hidFullFQBN" runat="server" />
-    </form>
 </body>
 </html>
