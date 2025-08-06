@@ -82,7 +82,8 @@ Public Class BoardManager
         AddBoard("ESP32-S2", "esp32:esp32:esp32s2")
         AddBoard("ESP32-C3", "esp32:esp32:esp32c3")
         AddBoard("ESP32-S3", "esp32:esp32:esp32s3")
-        AddBoard("ESP32 Wrover Kit", "esp32:esp32:esp32wrover")
+        AddBoard("ESP32 Wrover Kit", "esp32:esp32:esp32wroverkit")
+        AddBoard("ESP32 Wrover", "esp32:esp32:esp32wrover")
         AddBoard("ESP32 Pico Kit", "esp32:esp32:pico32")
         AddBoard("ESP32-C6", "esp32:esp32:esp32c6")
         AddBoard("ESP32-H2", "esp32:esp32:esp32h2")
@@ -124,7 +125,12 @@ Public Class BoardManager
         AddESP32C3Options()
 
         ' ESP32 Wrover Kit - CORRECTED OPTIONS based on actual boards.txt
+        AddESP32WroverKitOptions()
+
+        ' ESP32 Wrover Module - CORRECTED OPTIONS based on actual boards.txt
         AddESP32WroverOptions()
+
+
 
         ' ESP32 Pico Kit - VERY LIMITED OPTIONS as specified
         AddESP32PicoOptions()
@@ -494,7 +500,7 @@ Public Class BoardManager
         esp32S3Defaults.Add("EraseFlash", "none")
         esp32S3Defaults.Add("EventsCore", "1")
         esp32S3Defaults.Add("LoopCore", "1")
-        esp32S3Defaults.Add("ZigbeeMode", "hwcdc")
+        esp32S3Defaults.Add("ZigbeeMode", "default")
         esp32S3Defaults.Add("USBMode", "hwcdc")
         esp32S3Defaults.Add("UploadMode", "default")
         boardOptionDefaults.Add("ESP32-S3", esp32S3Defaults)
@@ -507,8 +513,8 @@ Public Class BoardManager
 
         ' CPU Frequency
         Dim cpuFreq As New Dictionary(Of String, String)
-        cpuFreq.Add("160", "160MHz")
-        cpuFreq.Add("80", "80MHz")
+        cpuFreq.Add("160", "160MHz (WiFi)")
+        cpuFreq.Add("80", "80MHz (WiFi)")
         cpuFreq.Add("40", "40MHz")
         cpuFreq.Add("20", "20MHz")
         cpuFreq.Add("10", "10MHz")
@@ -529,8 +535,8 @@ Public Class BoardManager
         ' Flash Size
         Dim flashSize As New Dictionary(Of String, String)
         flashSize.Add("4M", "4MB (32Mb)")
-        flashSize.Add("2M", "2MB (16Mb)")
         flashSize.Add("8M", "8MB (64Mb)")
+        flashSize.Add("2M", "8MB (16Mb)")
         flashSize.Add("16M", "16MB (128Mb)")
         esp32C3Options.Add("FlashSize", flashSize)
 
@@ -540,6 +546,7 @@ Public Class BoardManager
         uploadSpeed.Add("115200", "115200")
         uploadSpeed.Add("230400", "230400")
         uploadSpeed.Add("460800", "460800")
+        uploadSpeed.Add("512000", "512000")
         esp32C3Options.Add("UploadSpeed", uploadSpeed)
 
         ' Core Debug Level
@@ -573,6 +580,13 @@ Public Class BoardManager
         jtagAdapter.Add("bridge", "ESP USB Bridge")
         esp32C3Options.Add("JTAGAdapter", jtagAdapter)
 
+        ' Zigbee Mode - CORRECTED values
+        Dim zigbeeMode As New Dictionary(Of String, String)
+        zigbeeMode.Add("default", "Disabled")
+        zigbeeMode.Add("zczr", "Zigbee ZCZR (coordinator/router)")
+        esp32C3Options.Add("ZigbeeMode", zigbeeMode)
+
+
 
         boardOptions.Add("ESP32-C3", esp32C3Options)
 
@@ -587,13 +601,100 @@ Public Class BoardManager
         esp32C3Defaults.Add("EraseFlash", "none")
         esp32C3Defaults.Add("CDCOnBoot", "default")
         esp32C3Defaults.Add("JTAGAdapter", "default")
+        esp32C3Defaults.Add("ZigbeeMode", "default")
         boardOptionDefaults.Add("ESP32-C3", esp32C3Defaults)
         boardOptionActualValues.Add("ESP32-C3", esp32C3Defaults.ToDictionary(Function(x) x.Key, Function(x) x.Value))
     End Sub
 
     ' ESP32 Wrover Kit - CORRECTED based on actual boards.txt
+    Private Sub AddESP32WroverKitOptions()
+        Dim esp32WroverkitOptions As New Dictionary(Of String, Dictionary(Of String, String))
+
+        ' CPU Frequency
+        Dim cpuFreq As New Dictionary(Of String, String)
+        cpuFreq.Add("240", "240MHz (WiFi/BT)")
+        cpuFreq.Add("160", "160MHz (WiFi/BT)")
+        cpuFreq.Add("80", "80MHz (WiFi/BT)")
+        cpuFreq.Add("40", "40MHz (40MHz XTAL)")
+        cpuFreq.Add("26", "26MHz (26MHz XTAL)")
+        cpuFreq.Add("20", "20MHz (40MHz XTAL)")
+        cpuFreq.Add("13", "13MHz (26MHz XTAL)")
+        cpuFreq.Add("10", "10MHz (40MHz XTAL)")
+        esp32WroverkitOptions.Add("CPUFreq", cpuFreq)
+
+
+        ' Flash Frequency
+        Dim flashFreq As New Dictionary(Of String, String)
+        flashFreq.Add("80", "80MHz")
+        flashFreq.Add("40", "40MHz")
+        esp32WroverkitOptions.Add("FlashFreq", flashFreq)
+
+        ' Flash Mode
+        Dim flashMode As New Dictionary(Of String, String)
+        flashMode.Add("qio", "QIO")
+        flashMode.Add("dio", "DIO")
+        esp32WroverkitOptions.Add("FlashMode", flashMode)
+
+        ' Flash Size
+        Dim flashSize As New Dictionary(Of String, String)
+        flashSize.Add("4M", "4MB (32Mb)")
+        flashSize.Add("8M", "8MB (64Mb)")
+        flashSize.Add("2M", "8MB (16Mb)")
+        flashSize.Add("16M", "16MB (128Mb)")
+        esp32WroverkitOptions.Add("FlashSize", flashSize)
+
+        ' Upload Speed
+        Dim uploadSpeed As New Dictionary(Of String, String)
+        uploadSpeed.Add("921600", "921600")
+        uploadSpeed.Add("115200", "115200")
+        uploadSpeed.Add("230400", "230400")
+        uploadSpeed.Add("460800", "460800")
+        uploadSpeed.Add("512000", "512000")
+        esp32WroverkitOptions.Add("UploadSpeed", uploadSpeed)
+
+        ' Core Debug Level
+        Dim debugLevel As New Dictionary(Of String, String)
+        debugLevel.Add("none", "None")
+        debugLevel.Add("error", "Error")
+        debugLevel.Add("warn", "Warning")
+        debugLevel.Add("info", "Info")
+        debugLevel.Add("debug", "Debug")
+        debugLevel.Add("verbose", "Verbose")
+        esp32WroverkitOptions.Add("DebugLevel", debugLevel)
+
+        ' PSRAM
+        Dim psram As New Dictionary(Of String, String)
+        psram.Add("disabled", "Disabled")
+        psram.Add("enabled", "Enabled")
+        esp32WroverkitOptions.Add("PSRAM", psram)
+
+        ' Erase Flash
+        Dim eraseFlash As New Dictionary(Of String, String)
+        eraseFlash.Add("none", "Disabled")
+        eraseFlash.Add("all", "Enabled")
+        esp32WroverkitOptions.Add("EraseFlash", eraseFlash)
+
+        boardOptions.Add("ESP32 Wrover Kit", esp32WroverkitOptions)
+
+        ' Set defaults
+        Dim esp32WroverkitDefaults As New Dictionary(Of String, String)
+        esp32WroverkitDefaults.Add("CPUFreq", "240")
+        esp32WroverkitDefaults.Add("FlashFreq", "80")
+        esp32WroverkitDefaults.Add("FlashMode", "qio")
+        esp32WroverkitDefaults.Add("FlashSize", "4M")
+        esp32WroverkitDefaults.Add("UploadSpeed", "921600")
+        esp32WroverkitDefaults.Add("DebugLevel", "none")
+        esp32WroverkitDefaults.Add("PSRAM", "enabled")
+        esp32WroverkitDefaults.Add("EraseFlash", "none")
+        boardOptionDefaults.Add("ESP32 Wrover Kit", esp32WroverkitDefaults)
+        boardOptionActualValues.Add("ESP32 Wrover Kit", esp32WroverkitDefaults.ToDictionary(Function(x) x.Key, Function(x) x.Value))
+    End Sub
+
+
+    ' ESP32 Wrover Module - CORRECTED based on actual boards.txt
     Private Sub AddESP32WroverOptions()
         Dim esp32WroverOptions As New Dictionary(Of String, Dictionary(Of String, String))
+
 
         ' Flash Frequency
         Dim flashFreq As New Dictionary(Of String, String)
@@ -607,12 +708,14 @@ Public Class BoardManager
         flashMode.Add("dio", "DIO")
         esp32WroverOptions.Add("FlashMode", flashMode)
 
+
         ' Upload Speed
         Dim uploadSpeed As New Dictionary(Of String, String)
         uploadSpeed.Add("921600", "921600")
         uploadSpeed.Add("115200", "115200")
         uploadSpeed.Add("230400", "230400")
         uploadSpeed.Add("460800", "460800")
+        uploadSpeed.Add("512000", "512000")
         esp32WroverOptions.Add("UploadSpeed", uploadSpeed)
 
         ' Core Debug Level
@@ -625,11 +728,6 @@ Public Class BoardManager
         debugLevel.Add("verbose", "Verbose")
         esp32WroverOptions.Add("DebugLevel", debugLevel)
 
-        ' PSRAM
-        Dim psram As New Dictionary(Of String, String)
-        psram.Add("disabled", "Disabled")
-        psram.Add("enabled", "Enabled")
-        esp32WroverOptions.Add("PSRAM", psram)
 
         ' Erase Flash
         Dim eraseFlash As New Dictionary(Of String, String)
@@ -637,7 +735,7 @@ Public Class BoardManager
         eraseFlash.Add("all", "Enabled")
         esp32WroverOptions.Add("EraseFlash", eraseFlash)
 
-        boardOptions.Add("ESP32 Wrover Kit", esp32WroverOptions)
+        boardOptions.Add("ESP32 Wrover", esp32WroverOptions)
 
         ' Set defaults
         Dim esp32WroverDefaults As New Dictionary(Of String, String)
@@ -645,10 +743,9 @@ Public Class BoardManager
         esp32WroverDefaults.Add("FlashMode", "qio")
         esp32WroverDefaults.Add("UploadSpeed", "921600")
         esp32WroverDefaults.Add("DebugLevel", "none")
-        esp32WroverDefaults.Add("PSRAM", "enabled")
         esp32WroverDefaults.Add("EraseFlash", "none")
-        boardOptionDefaults.Add("ESP32 Wrover Kit", esp32WroverDefaults)
-        boardOptionActualValues.Add("ESP32 Wrover Kit", esp32WroverDefaults.ToDictionary(Function(x) x.Key, Function(x) x.Value))
+        boardOptionDefaults.Add("ESP32 Wrover", esp32WroverDefaults)
+        boardOptionActualValues.Add("ESP32 Wrover", esp32WroverDefaults.ToDictionary(Function(x) x.Key, Function(x) x.Value))
     End Sub
 
     ' ESP32 Pico Kit - VERY LIMITED OPTIONS
@@ -661,6 +758,7 @@ Public Class BoardManager
         uploadSpeed.Add("115200", "115200")
         uploadSpeed.Add("230400", "230400")
         uploadSpeed.Add("460800", "460800")
+        uploadSpeed.Add("512000", "512000")
         esp32PicoOptions.Add("UploadSpeed", uploadSpeed)
 
         ' Core Debug Level
@@ -696,9 +794,12 @@ Public Class BoardManager
 
         ' CPU Frequency
         Dim cpuFreq As New Dictionary(Of String, String)
-        cpuFreq.Add("160", "160MHz")
-        cpuFreq.Add("80", "80MHz")
+        cpuFreq.Add("160", "160MHz (WiFi)")
+        cpuFreq.Add("120", "120MHz (WiFi)")
+        cpuFreq.Add("80", "80MHz (WiFi)")
         cpuFreq.Add("40", "40MHz")
+        cpuFreq.Add("20", "20MHz")
+        cpuFreq.Add("10", "10MHz")
         esp32C6Options.Add("CPUFreq", cpuFreq)
 
         ' Flash Frequency
@@ -711,8 +812,6 @@ Public Class BoardManager
         Dim flashMode As New Dictionary(Of String, String)
         flashMode.Add("qio", "QIO")
         flashMode.Add("dio", "DIO")
-        flashMode.Add("qout", "QOUT")
-        flashMode.Add("dout", "DOUT")
         esp32C6Options.Add("FlashMode", flashMode)
 
         ' Flash Size
@@ -729,15 +828,23 @@ Public Class BoardManager
         uploadSpeed.Add("115200", "115200")
         uploadSpeed.Add("230400", "230400")
         uploadSpeed.Add("460800", "460800")
+        uploadSpeed.Add("512000", "512000")
         esp32C6Options.Add("UploadSpeed", uploadSpeed)
+
+        ' CDC On Boot
+        Dim cdcOnBoot As New Dictionary(Of String, String)
+        cdcOnBoot.Add("default", "Disabled")
+        cdcOnBoot.Add("cdc", "Enabled")
+        esp32C6Options.Add("CDCOnBoot", cdcOnBoot)
 
         ' Core Debug Level
         Dim debugLevel As New Dictionary(Of String, String)
         debugLevel.Add("none", "None")
         debugLevel.Add("error", "Error")
-        debugLevel.Add("warn", "Warning")
+        debugLevel.Add("warn", "Warn")
         debugLevel.Add("info", "Info")
         debugLevel.Add("debug", "Debug")
+        debugLevel.Add("verbose", "Verbose")
         esp32C6Options.Add("DebugLevel", debugLevel)
 
         ' Erase Flash
@@ -745,6 +852,23 @@ Public Class BoardManager
         eraseFlash.Add("none", "Disabled")
         eraseFlash.Add("all", "Enabled")
         esp32C6Options.Add("EraseFlash", eraseFlash)
+
+        ' JTAG Adapter
+        Dim jtagAdapter As New Dictionary(Of String, String)
+        jtagAdapter.Add("default", "Disabled")
+        jtagAdapter.Add("builtin", "Integrated USB JTAG")
+        jtagAdapter.Add("external", "FTDI Adapter")
+        jtagAdapter.Add("bridge", "ESP USB Bridge")
+        esp32C6Options.Add("JTAGAdapter", jtagAdapter)
+
+        ' Zigbee Mode 
+        Dim zigbeeMode As New Dictionary(Of String, String)
+        zigbeeMode.Add("default", "Disabled")
+        zigbeeMode.Add("ed", "Zigbee ED (end device)")
+        zigbeeMode.Add("zczr", "Zigbee ZCZR (coordinator/router)")
+        zigbeeMode.Add("ed_debug", "Zigbee ED (end device)-Debug")
+        zigbeeMode.Add("zczr_debug", "Zigbee ZCZR (coordinator/router)-Debug")
+        esp32C6Options.Add("ZigbeeMode", zigbeeMode)
 
         boardOptions.Add("ESP32-C6", esp32C6Options)
 
@@ -755,8 +879,11 @@ Public Class BoardManager
         esp32C6Defaults.Add("FlashMode", "qio")
         esp32C6Defaults.Add("FlashSize", "4M")
         esp32C6Defaults.Add("UploadSpeed", "921600")
+        esp32C6Defaults.Add("CDCOnBoot", "default")
         esp32C6Defaults.Add("DebugLevel", "none")
         esp32C6Defaults.Add("EraseFlash", "none")
+        esp32C6Defaults.Add("JTAGAdapter", "default")
+        esp32C6Defaults.Add("ZigbeeMode", "default")
         boardOptionDefaults.Add("ESP32-C6", esp32C6Defaults)
         boardOptionActualValues.Add("ESP32-C6", esp32C6Defaults.ToDictionary(Function(x) x.Key, Function(x) x.Value))
     End Sub
@@ -799,6 +926,7 @@ Public Class BoardManager
         debugLevel.Add("warn", "Warning")
         debugLevel.Add("info", "Info")
         debugLevel.Add("debug", "Debug")
+        debugLevel.Add("verbose", "Verbose")
         esp32H2Options.Add("DebugLevel", debugLevel)
 
         ' Erase Flash
@@ -810,8 +938,8 @@ Public Class BoardManager
         ' USB CDC On Boot
         Dim usbCDC As New Dictionary(Of String, String)
         usbCDC.Add("default", "Default")
-        usbCDC.Add("enabled", "Enabled")
-        esp32H2Options.Add("USBCDCOnBoot", usbCDC)
+        usbCDC.Add("cdc", "Enabled")
+        esp32H2Options.Add("CDCOnBoot", usbCDC)
 
         ' JTAG Adapter
         Dim jtagAdapter As New Dictionary(Of String, String)
@@ -823,7 +951,7 @@ Public Class BoardManager
 
         ' Zigbee Mode - CORRECTED values
         Dim zigbeeMode As New Dictionary(Of String, String)
-        zigbeeMode.Add("none", "Disabled")
+        zigbeeMode.Add("default", "Disabled")
         zigbeeMode.Add("ed", "Zigbee ED (end device)")
         zigbeeMode.Add("zczr", "Zigbee ZCZR (coordinator/router)")
         zigbeeMode.Add("ed_debug", "Zigbee ED (end device)-Debug")
@@ -840,9 +968,9 @@ Public Class BoardManager
         esp32H2Defaults.Add("UploadSpeed", "921600")
         esp32H2Defaults.Add("DebugLevel", "none")
         esp32H2Defaults.Add("EraseFlash", "none")
-        esp32H2Defaults.Add("USBCDCOnBoot", "default")
+        esp32H2Defaults.Add("CDCOnBoot", "default")
         esp32H2Defaults.Add("JTAGAdapter", "default")
-        esp32H2Defaults.Add("ZigbeeMode", "none")
+        esp32H2Defaults.Add("ZigbeeMode", "default")
         boardOptionDefaults.Add("ESP32-H2", esp32H2Defaults)
         boardOptionActualValues.Add("ESP32-H2", esp32H2Defaults.ToDictionary(Function(x) x.Key, Function(x) x.Value))
     End Sub
@@ -908,11 +1036,6 @@ Public Class BoardManager
         cdcOnBootDetails.Add("name", "CDC On Boot")
         cdcOnBootDetails.Add("description", "Enable USB CDC on boot")
         boardOptionDetails.Add("CDCOnBoot", cdcOnBootDetails)
-
-        Dim usbCDCDetails As New Dictionary(Of String, String)
-        usbCDCDetails.Add("name", "USB CDC On Boot")
-        usbCDCDetails.Add("description", "Enable USB CDC on boot")
-        boardOptionDetails.Add("USBCDCOnBoot", usbCDCDetails)
 
         Dim jtagAdapterDetails As New Dictionary(Of String, String)
         jtagAdapterDetails.Add("name", "JTAG Adapter")
