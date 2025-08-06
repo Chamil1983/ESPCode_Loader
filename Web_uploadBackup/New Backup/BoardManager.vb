@@ -1,4 +1,4 @@
-﻿Imports System.IO
+Imports System.IO
 Imports System.Text.RegularExpressions
 
 Public Class BoardManager
@@ -372,20 +372,17 @@ Public Class BoardManager
         cpuFreq.Add("240", "240MHz (WiFi/BT)")
         cpuFreq.Add("160", "160MHz")
         cpuFreq.Add("80", "80MHz")
+        cpuFreq.Add("20", "20MHz")
+        cpuFreq.Add("10", "10MHz")
         esp32S3Options.Add("CPUFreq", cpuFreq)
 
-        ' Flash Frequency
-        Dim flashFreq As New Dictionary(Of String, String)
-        flashFreq.Add("80", "80MHz")
-        flashFreq.Add("40", "40MHz")
-        esp32S3Options.Add("FlashFreq", flashFreq)
 
         ' Flash Mode
         Dim flashMode As New Dictionary(Of String, String)
-        flashMode.Add("qio", "QIO")
-        flashMode.Add("dio", "DIO")
-        flashMode.Add("qout", "QOUT")
-        flashMode.Add("dout", "DOUT")
+        flashMode.Add("qio", "QIO 80MHz")
+        flashMode.Add("qio120", "QIO 120MHz")
+        flashMode.Add("dio", "DIO 80MHz")
+        flashMode.Add("opi", "OPI 80MHz")
         esp32S3Options.Add("FlashMode", flashMode)
 
         ' Flash Size
@@ -414,11 +411,37 @@ Public Class BoardManager
         debugLevel.Add("verbose", "Verbose")
         esp32S3Options.Add("DebugLevel", debugLevel)
 
+        ' CDC On Boot
+        Dim cdcOnBoot As New Dictionary(Of String, String)
+        cdcOnBoot.Add("default", "Disabled")
+        cdcOnBoot.Add("cdc", "Enabled")
+        esp32S3Options.Add("CDCOnBoot", cdcOnBoot)
+
+        ' DFU On Boot
+        Dim dfuOnBoot As New Dictionary(Of String, String)
+        dfuOnBoot.Add("default", "Disabled")
+        dfuOnBoot.Add("dfu", "Enabled (Requires USB-OTG Mode)")
+        esp32S3Options.Add("DFUOnBoot", dfuOnBoot)
+
+        ' USB Firmware MSC On Boot
+        Dim mscOnBoot As New Dictionary(Of String, String)
+        mscOnBoot.Add("default", "Disabled")
+        mscOnBoot.Add("msc", "Enabled (Requires USB-OTG Mode)")
+        esp32S3Options.Add("MSCOnBoot", mscOnBoot)
+
         ' PSRAM
         Dim psram As New Dictionary(Of String, String)
         psram.Add("disabled", "Disabled")
-        psram.Add("enabled", "Enabled")
+        psram.Add("enabled", "QSPI PSRAM")
+        psram.Add("opi", "OPI PSRAM")
         esp32S3Options.Add("PSRAM", psram)
+
+        ' Upload Mode
+        Dim upload As New Dictionary(Of String, String)
+        upload.Add("default", "UART0 / Hardware CDC")
+        upload.Add("cdc", "USB-OTG CDC (TinyUSB)")
+        esp32S3Options.Add("UploadMode", upload)
+
 
         ' Erase Flash
         Dim eraseFlash As New Dictionary(Of String, String)
@@ -440,17 +463,29 @@ Public Class BoardManager
 
         ' USB Mode - ESP32-S3 uses USBMode
         Dim usbMode As New Dictionary(Of String, String)
-        usbMode.Add("hwcdc", "Hardware CDC")
-        usbMode.Add("tinywud", "TinyUSB")
-        usbMode.Add("disabled", "Disabled")
+        usbMode.Add("default", "USB-OTG (TinyUSB)")
+        usbMode.Add("hwcdc", "Hardware CDC and JTAG")
         esp32S3Options.Add("USBMode", usbMode)
+
+        ' JTAG Adapter
+        Dim jtagAdapter As New Dictionary(Of String, String)
+        jtagAdapter.Add("default", "Disabled")
+        jtagAdapter.Add("builtin", "Integrated USB JTAG")
+        jtagAdapter.Add("external", "FTDI Adapter")
+        jtagAdapter.Add("bridge", "ESP USB Bridge")
+        esp32S3Options.Add("JTAGAdapter", jtagAdapter)
+
+        ' Zigbee Mode - CORRECTED values
+        Dim zigbeeMode As New Dictionary(Of String, String)
+        zigbeeMode.Add("default", "Disabled")
+        zigbeeMode.Add("zczr", "Zigbee ZCZR (coordinator/router)")
+        esp32S3Options.Add("ZigbeeMode", zigbeeMode)
 
         boardOptions.Add("ESP32-S3", esp32S3Options)
 
         ' Set defaults
         Dim esp32S3Defaults As New Dictionary(Of String, String)
         esp32S3Defaults.Add("CPUFreq", "240")
-        esp32S3Defaults.Add("FlashFreq", "80")
         esp32S3Defaults.Add("FlashMode", "qio")
         esp32S3Defaults.Add("FlashSize", "8M")
         esp32S3Defaults.Add("UploadSpeed", "921600")
@@ -459,7 +494,9 @@ Public Class BoardManager
         esp32S3Defaults.Add("EraseFlash", "none")
         esp32S3Defaults.Add("EventsCore", "1")
         esp32S3Defaults.Add("LoopCore", "1")
+        esp32S3Defaults.Add("ZigbeeMode", "hwcdc")
         esp32S3Defaults.Add("USBMode", "hwcdc")
+        esp32S3Defaults.Add("UploadMode", "default")
         boardOptionDefaults.Add("ESP32-S3", esp32S3Defaults)
         boardOptionActualValues.Add("ESP32-S3", esp32S3Defaults.ToDictionary(Function(x) x.Key, Function(x) x.Value))
     End Sub
@@ -473,6 +510,8 @@ Public Class BoardManager
         cpuFreq.Add("160", "160MHz")
         cpuFreq.Add("80", "80MHz")
         cpuFreq.Add("40", "40MHz")
+        cpuFreq.Add("20", "20MHz")
+        cpuFreq.Add("10", "10MHz")
         esp32C3Options.Add("CPUFreq", cpuFreq)
 
         ' Flash Frequency
@@ -485,8 +524,6 @@ Public Class BoardManager
         Dim flashMode As New Dictionary(Of String, String)
         flashMode.Add("qio", "QIO")
         flashMode.Add("dio", "DIO")
-        flashMode.Add("qout", "QOUT")
-        flashMode.Add("dout", "DOUT")
         esp32C3Options.Add("FlashMode", flashMode)
 
         ' Flash Size
@@ -527,6 +564,16 @@ Public Class BoardManager
         cdcOnBoot.Add("cdc", "Enabled")
         esp32C3Options.Add("CDCOnBoot", cdcOnBoot)
 
+
+        ' JTAG Adapter
+        Dim jtagAdapter As New Dictionary(Of String, String)
+        jtagAdapter.Add("default", "Disabled")
+        jtagAdapter.Add("builtin", "Integrated USB JTAG")
+        jtagAdapter.Add("external", "FTDI Adapter")
+        jtagAdapter.Add("bridge", "ESP USB Bridge")
+        esp32C3Options.Add("JTAGAdapter", jtagAdapter)
+
+
         boardOptions.Add("ESP32-C3", esp32C3Options)
 
         ' Set defaults
@@ -539,6 +586,7 @@ Public Class BoardManager
         esp32C3Defaults.Add("DebugLevel", "none")
         esp32C3Defaults.Add("EraseFlash", "none")
         esp32C3Defaults.Add("CDCOnBoot", "default")
+        esp32C3Defaults.Add("JTAGAdapter", "default")
         boardOptionDefaults.Add("ESP32-C3", esp32C3Defaults)
         boardOptionActualValues.Add("ESP32-C3", esp32C3Defaults.ToDictionary(Function(x) x.Key, Function(x) x.Value))
     End Sub
