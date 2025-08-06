@@ -1,4 +1,4 @@
-﻿Imports System.IO
+Imports System.IO
 Imports System.IO.Compression
 Imports System.IO.Ports
 Imports ArduinoWeb
@@ -335,16 +335,20 @@ Public Class [Default]
 
                 Case "ESP32-S3"
                     BoardConfigOptions("CPUFreq") = "240"
-                    BoardConfigOptions("FlashFreq") = "80"
                     BoardConfigOptions("FlashMode") = "qio"
                     BoardConfigOptions("FlashSize") = "8M"
                     BoardConfigOptions("UploadSpeed") = "921600"
                     BoardConfigOptions("DebugLevel") = "none"
+                    BoardConfigOptions("CDCOnBoot") = "none"
+                    BoardConfigOptions("DFUOnBoot") = "default"
+                    BoardConfigOptions("MSCOnBoot") = "default"
                     BoardConfigOptions("PSRAM") = "disabled"
                     BoardConfigOptions("EraseFlash") = "none"
                     BoardConfigOptions("EventsCore") = "1"
                     BoardConfigOptions("LoopCore") = "1"
                     BoardConfigOptions("USBMode") = "hwcdc"
+                    BoardConfigOptions("ZigbeeMode") = "hwcdc"
+
 
                 Case "ESP32-C3"
                     BoardConfigOptions("CPUFreq") = "160"
@@ -354,7 +358,9 @@ Public Class [Default]
                     BoardConfigOptions("UploadSpeed") = "921600"
                     BoardConfigOptions("DebugLevel") = "none"
                     BoardConfigOptions("EraseFlash") = "none"
-                ' NOTE: ESP32-C3 does NOT have PSRAM, EventsCore, LoopCore, or USBMode
+                    BoardConfigOptions("CDCOnBoot") = "default"
+                    BoardConfigOptions("JTAGAdapter") = "default"
+
 
                 Case "ESP32 Wrover Kit"
                     BoardConfigOptions("CPUFreq") = "240"
