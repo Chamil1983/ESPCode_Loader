@@ -347,7 +347,7 @@ Public Class [Default]
                     BoardConfigOptions("EventsCore") = "1"
                     BoardConfigOptions("LoopCore") = "1"
                     BoardConfigOptions("USBMode") = "hwcdc"
-                    BoardConfigOptions("ZigbeeMode") = "hwcdc"
+                    BoardConfigOptions("ZigbeeMode") = "default"
 
 
                 Case "ESP32-C3"
@@ -360,6 +360,7 @@ Public Class [Default]
                     BoardConfigOptions("EraseFlash") = "none"
                     BoardConfigOptions("CDCOnBoot") = "default"
                     BoardConfigOptions("JTAGAdapter") = "default"
+                    BoardConfigOptions("ZigbeeMode") = "default"
 
 
                 Case "ESP32 Wrover Kit"
@@ -371,20 +372,21 @@ Public Class [Default]
                     BoardConfigOptions("DebugLevel") = "none"
                     BoardConfigOptions("PSRAM") = "enabled"
                     BoardConfigOptions("EraseFlash") = "none"
-                    BoardConfigOptions("EventsCore") = "1"
-                    BoardConfigOptions("LoopCore") = "1"
 
-                Case "ESP32 Pico Kit"
-                    BoardConfigOptions("CPUFreq") = "240"
+
+                Case "ESP32 Wrover"
                     BoardConfigOptions("FlashFreq") = "80"
                     BoardConfigOptions("FlashMode") = "qio"
-                    BoardConfigOptions("FlashSize") = "4M"
                     BoardConfigOptions("UploadSpeed") = "921600"
                     BoardConfigOptions("DebugLevel") = "none"
-                    BoardConfigOptions("PSRAM") = "disabled"
                     BoardConfigOptions("EraseFlash") = "none"
-                    BoardConfigOptions("EventsCore") = "1"
-                    BoardConfigOptions("LoopCore") = "1"
+
+
+                Case "ESP32 Pico Kit"
+                    BoardConfigOptions("UploadSpeed") = "921600"
+                    BoardConfigOptions("DebugLevel") = "none"
+                    BoardConfigOptions("EraseFlash") = "none"
+
 
                 Case "ESP32-C6", "ESP32-H2"
                     BoardConfigOptions("CPUFreq") = "160"
@@ -392,8 +394,25 @@ Public Class [Default]
                     BoardConfigOptions("FlashMode") = "qio"
                     BoardConfigOptions("FlashSize") = "4M"
                     BoardConfigOptions("UploadSpeed") = "921600"
+                    BoardConfigOptions("CDCOnBoot") = "default"
                     BoardConfigOptions("DebugLevel") = "none"
                     BoardConfigOptions("EraseFlash") = "none"
+                    BoardConfigOptions("JTAGAdapter") = "default"
+                    BoardConfigOptions("ZigbeeMode") = "default"
+
+
+                Case "ESP32-H2"
+                    BoardConfigOptions("CPUFreq") = "64"
+                    BoardConfigOptions("FlashMode") = "qio"
+                    BoardConfigOptions("FlashSize") = "4M"
+                    BoardConfigOptions("UploadSpeed") = "921600"
+                    BoardConfigOptions("DebugLevel") = "none"
+                    BoardConfigOptions("EraseFlash") = "none"
+                    BoardConfigOptions("CDCOnBoot") = "default"
+                    BoardConfigOptions("JTAGAdapter") = "default"
+                    BoardConfigOptions("ZigbeeMode") = "default"
+
+
                     ' NOTE: ESP32-C6/H2 do NOT have PSRAM, EventsCore, LoopCore, or USBMode
             End Select
         End If
@@ -479,6 +498,7 @@ Public Class [Default]
             ddlBoard.Items.Add(New ListItem("ESP32-C3", "ESP32-C3"))
             ddlBoard.Items.Add(New ListItem("ESP32-S3", "ESP32-S3"))
             ddlBoard.Items.Add(New ListItem("ESP32 Wrover Kit", "ESP32 Wrover Kit"))
+            ddlBoard.Items.Add(New ListItem("ESP32 Wrover", "ESP32 Wrover"))
             ddlBoard.Items.Add(New ListItem("ESP32 Pico Kit", "ESP32 Pico Kit"))
             ddlBoard.Items.Add(New ListItem("ESP32-C6", "ESP32-C6"))
             ddlBoard.Items.Add(New ListItem("ESP32-H2", "ESP32-H2"))
@@ -619,7 +639,7 @@ Public Class [Default]
         For Each optKvp As KeyValuePair(Of String, Dictionary(Of String, String)) In options
             ' Skip USBMode for non-USB boards (ESP32 standard)
             If optKvp.Key = "USBMode" AndAlso
-               (boardName = "ESP32 Dev Module" OrElse boardName = "ESP32 Wrover Kit" OrElse boardName = "ESP32 Pico Kit") Then
+               (boardName = "ESP32 Dev Module" OrElse boardName = "ESP32 Wrover Kit" OrElse boardName = "ESP32 Wrover" OrElse boardName = "ESP32 Pico Kit") Then
                 AppendToLog($"Skipping USBMode for {boardName} as it's not supported")
                 Continue For
             End If
@@ -958,7 +978,7 @@ Public Class [Default]
         End If
 
         ' Handle USBMode for non-USB capable boards
-        If boardName.Contains("ESP32 Dev Module") Or boardName.Contains("ESP32 Wrover Kit") Or
+        If boardName.Contains("ESP32 Dev Module") Or boardName.Contains("ESP32 Wrover Kit") Or boardName.Contains("ESP32 Wrover") Or
            boardName.Contains("ESP32 Pico Kit") Or boardName.Contains("ESP32-C3") Then
             If options.ContainsKey("USBMode") Then
                 AppendToLog($"Removed USBMode option for {boardName} - not supported")
