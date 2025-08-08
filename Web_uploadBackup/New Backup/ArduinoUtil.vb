@@ -1,4 +1,5 @@
 Imports System.Diagnostics
+Imports System.IO
 Imports System.Text
 
 Public Class ArduinoUtil
@@ -62,5 +63,21 @@ Public Class ArduinoUtil
             result.Success = False
         End Try
         Return result
+    End Function
+
+    ' Additional method to support binary export
+    ' Binary export with output callback - using the correct flags
+    Public Shared Function RunBinaryExportRealtime(cliPath As String, projDir As String, fqbn As String, exportDir As String, outputCb As OutputHandler) As ExecResult
+        ' Use the -e flag (--export-binaries) and --build-path options which are supported
+        Dim args = $"compile --fqbn {fqbn} -v -e --build-path ""{exportDir}"" ""{projDir}"""
+        Return RunArduinoCliRealtime(cliPath, args, projDir, outputCb)
+    End Function
+
+    ' Upload binary file directly with output callback
+    Public Shared Function RunBinaryUploadRealtime(cliPath As String, binaryFile As String, fqbn As String, port As String, verify As Boolean, outputCb As OutputHandler) As ExecResult
+        ' arduino-cli upload command with binary file
+        Dim verifyFlag = If(verify, " -t", "")
+        Dim args = $"upload -i ""{binaryFile}"" --fqbn {fqbn} --port {port}{verifyFlag} -v"
+        Return RunArduinoCliRealtime(cliPath, args, Path.GetDirectoryName(binaryFile), outputCb)
     End Function
 End Class
