@@ -1,4 +1,4 @@
-<%@ Page Language="VB" AutoEventWireup="false" CodeBehind="Default.aspx.vb" Inherits="ArduinoWeb.Default" %>
+<%@ Page Language="VB" AutoEventWireup="false" CodeBehind="Default.aspx.vb" Inherits="ArduinoWeb.Default" ValidateRequest="false" %>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head runat="server">
@@ -888,6 +888,72 @@
         overflow-wrap: break-word;
         white-space: normal;
     }
+
+        /* Binary export button styling */
+    .btn-export {
+        background-color: #6f42c1;
+        color: white;
+    }
+    
+    .btn-export:hover {
+        background-color: #5a32a3;
+    }
+    
+    /* Animation for successful export */
+    @keyframes highlight-export {
+        0% { background-color: rgba(111, 66, 193, 0.3); }
+        100% { background-color: transparent; }
+    }
+    
+    .export-file-item {
+        padding: 4px 8px;
+        border-radius: 3px;
+        margin-bottom: 4px;
+        font-family: var(--font-mono);
+        background-color: var(--gray-100);
+    }
+
+     /* Binary upload button styling */
+    .btn-warning {
+        background-color: #FF9800;
+        color: white;
+    }
+    
+    .btn-warning:hover {
+        background-color: #F57C00;
+    }
+    
+    /* Binary upload container styling */
+    #binaryUploadContainer {
+        transition: all 0.3s ease;
+    }
+    
+    #binaryUploadContainer:hover {
+        border-color: #FF9800;
+        box-shadow: 0 0 5px rgba(255, 152, 0, 0.3);
+    }
+    
+    /* Binary upload verification icon styling */
+    .verification-success {
+        color: var(--success);
+        font-weight: bold;
+    }
+    
+    .verification-error {
+        color: var(--danger);
+        font-weight: bold;
+    }
+    
+    /* Animation for verification progress */
+    @keyframes verification-pulse {
+        0% { opacity: 0.6; }
+        50% { opacity: 1; }
+        100% { opacity: 0.6; }
+    }
+    
+    .verification-progress {
+        animation: verification-pulse 1.5s infinite;
+    }
 </style>
 
 </head>
@@ -1035,15 +1101,21 @@
                     <h2><i class="fas fa-play-circle"></i> Build & Deploy</h2>
                 </div>
                 <div class="card-body">
-                    <div class="btn-group">
-                        <asp:Button ID="btnCompile" runat="server" Text="Compile" CssClass="btn btn-primary" ClientIDMode="Static" 
-                                   OnClick="btnCompile_Click" OnClientClick="resetAndStartProgress(); return true;" />
-                        <asp:Button ID="btnUpload" runat="server" Text="Upload" CssClass="btn btn-success" ClientIDMode="Static" 
-                                   OnClick="btnUpload_Click" OnClientClick="resetAndStartProgress(); return true;" />
-                                    <button type="button" id="btnShowStats" class="btn btn-info" onclick="showCurrentStats(); return false;">
-                                    <i class="fas fa-chart-bar"></i> Show Stats
-                                    </button>
-                    </div>
+<div class="btn-group">
+    <asp:Button ID="btnCompile" runat="server" Text="Compile" CssClass="btn btn-primary" ClientIDMode="Static" 
+               OnClick="btnCompile_Click" OnClientClick="resetAndStartProgress(); return true;" />
+    <asp:Button ID="btnUpload" runat="server" Text="Upload" CssClass="btn btn-success" ClientIDMode="Static" 
+               OnClick="btnUpload_Click" OnClientClick="resetAndStartProgress(); return true;" />
+    <!-- Export Binary button -->
+    <asp:Button ID="btnExportBinary" runat="server" Text="Export Binary" CssClass="btn btn-info" ClientIDMode="Static" 
+               OnClick="btnExportBinary_Click" OnClientClick="resetAndStartProgress(); return true;" />
+    <!-- Add the new Upload Binary button -->
+    <asp:Button ID="btnUploadBinary" runat="server" Text="Upload Binary" CssClass="btn btn-warning" ClientIDMode="Static" 
+               OnClick="btnUploadBinary_Click" OnClientClick="resetAndStartProgress(); return true;" />
+    <button type="button" id="btnShowStats" class="btn btn-info" onclick="showCurrentStats(); return false;">
+    <i class="fas fa-chart-bar"></i> Show Stats
+    </button>
+</div>
                     
                     <!-- Progress bar -->
                     <div id="progressContainer" class="progress-container">
@@ -1056,6 +1128,27 @@
                         </div>
                         <div id="debugProgress" class="debug-panel"></div>
                     </div>
+
+<div id="binaryUploadContainer" class="form-group" style="margin-top: 16px; padding: 15px; border: 1px dashed #ccc; border-radius: 4px; background-color: #f8f9fa;">
+    <label for="fuBinaryZip">Binary File for Upload:</label>
+    <div class="file-input-wrapper" style="margin-bottom: 10px;">
+        <asp:FileUpload ID="fuBinaryZip" runat="server" CssClass="file-input" accept=".bin,.hex,.elf,.zip" ValidateRequestMode="Disabled" />
+        <span class="file-input-label">
+            <i class="fas fa-file-archive"></i> Choose Binary File or ZIP
+        </span>
+    </div>
+    <div class="form-row">
+        <div class="form-col">
+            <asp:CheckBox ID="chkVerifyUpload" runat="server" Checked="true" Text="Verify upload" />
+        </div>
+        <div class="form-col">
+            <asp:TextBox ID="txtBinaryPath" runat="server" ReadOnly="true" placeholder="Selected binary file path will appear here" CssClass="form-control" />
+        </div>
+    </div>
+    <div class="tip">
+        <i class="fas fa-info-circle"></i> Upload a .bin, .hex, .elf, or .zip file containing binary files to flash directly to your device.
+    </div>
+</div>
                     
                     <!-- Statistics Panel with Chart -->
                     <div id="statsPanel" class="stats-panel">
@@ -2323,6 +2416,39 @@
                 updateFQBNPreview();
             }
         }, 2000);
+    </script>
+
+    <script type="text/javascript">
+        // Binary upload verification handling
+        function startVerification() {
+            var verifyStatusElem = document.getElementById('verificationStatus');
+            if (verifyStatusElem) {
+                verifyStatusElem.innerHTML = '<i class="fas fa-sync fa-spin"></i> Verifying...';
+                verifyStatusElem.className = 'verification-progress';
+            }
+        }
+
+        function completeVerification(success) {
+            var verifyStatusElem = document.getElementById('verificationStatus');
+            if (verifyStatusElem) {
+                if (success) {
+                    verifyStatusElem.innerHTML = '<i class="fas fa-check-circle"></i> Verified';
+                    verifyStatusElem.className = 'verification-success';
+                } else {
+                    verifyStatusElem.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Verification Failed';
+                    verifyStatusElem.className = 'verification-error';
+                }
+            }
+        }
+
+        // Show binary upload UI when button is clicked
+        function showBinaryUploadUI() {
+            var container = document.getElementById('binaryUploadContainer');
+            if (container) {
+                container.style.display = 'block';
+                container.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
     </script>
 </body>
 </html>
