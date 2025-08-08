@@ -13,7 +13,7 @@ Public Class [Default]
     Private Shared ReadOnly boardManager As New BoardManager()
 
     ' Default Arduino ESP32 boards.txt path
-    Private Const DEFAULT_BOARDS_TXT_PATH As String = "C:\Users\gen_rms_testroom\Documents\Arduino\VB.net\KC-Link\ArduinoWeb\App_Data\hardware\esp32\3.2.0\boards.txt"
+    Private Const DEFAULT_BOARDS_TXT_PATH As String = "D:\Projects\Visual_Studio\ArduinoWeb\App_Data\boards.txt"
 
     Protected ReadOnly Property IsUsingBoardsTxt As Boolean
         Get
@@ -2168,3 +2168,4 @@ Public Class [Default]
         Return If(a > b, a, b)
     End Function
 End Class
+
