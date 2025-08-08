@@ -13,7 +13,7 @@ Public Class [Default]
     Private Shared ReadOnly boardManager As New BoardManager()
 
     ' Default Arduino ESP32 boards.txt path
-    Private Const DEFAULT_BOARDS_TXT_PATH As String = "C:\Users\Chamil1983I\AppData\Local\arduino15\packages\esp32\hardware\esp32\3.2.0\boards.txt"
+    Private Const DEFAULT_BOARDS_TXT_PATH As String = "C:\Users\gen_rms_testroom\Documents\Arduino\VB.net\KC-Link\ArduinoWeb\App_Data\hardware\esp32\3.2.0\boards.txt"
 
     Protected ReadOnly Property IsUsingBoardsTxt As Boolean
         Get
@@ -144,6 +144,28 @@ Public Class [Default]
 
         ' Always register client scripts - for both initial load and postbacks
         RegisterClientScripts()
+
+        ' Register script for binary file selection UI update
+        ScriptManager.RegisterStartupScript(Me, Me.GetType(), "binaryFileSelectionHandler", String.Format("
+        document.addEventListener('DOMContentLoaded', function() {{
+            var fileInput = document.getElementById('{0}');
+            var filePathDisplay = document.getElementById('{1}');
+            
+            if (fileInput && filePathDisplay) {{
+                fileInput.addEventListener('change', function() {{
+                    if (fileInput.files.length > 0) {{
+                        filePathDisplay.value = fileInput.files[0].name;
+                        console.log('Binary file selected: ' + fileInput.files[0].name);
+                    }} else {{
+                        filePathDisplay.value = '';
+                    }}
+                }});
+            }}
+        }});
+    ", fuBinaryZip.ClientID, txtBinaryPath.ClientID), True)
+
+        ' Add this to disable validation on the form
+        Form.ValidateRequestMode = ValidateRequestMode.Disabled
     End Sub
 
     ' Register all client scripts needed for functionality
@@ -1439,6 +1461,534 @@ Public Class [Default]
         Catch
             ' Ignore errors on deletion
         End Try
+    End Sub
+
+    Protected Sub btnExportBinary_Click(sender As Object, e As EventArgs)
+        Try
+            ' Capture and save the latest board configurations before compiling
+            CaptureBoardOptionsFromUI()
+            UpdateFQBNPreview()
+
+            ' Initialize the output buffer once
+            Dim bufferList As List(Of String) = OutputBuffer
+            bufferList.Clear()
+            txtOutput.Text = ""
+
+            ' Get current partition scheme selection
+            Dim selectedScheme = ddlPartition.SelectedValue
+            Dim selectedSchemeText = ddlPartition.SelectedItem?.Text
+
+            ' Validate sketch folder
+            Dim err As String = ""
+            Dim projDir = GetValidSketchFolder(err)
+            If projDir Is Nothing Then
+                txtOutput.Text = err
+                Return
+            End If
+
+            ' Get selected board and partition scheme
+            Dim board = ddlBoard.SelectedValue
+            Dim schemeValue = selectedScheme
+
+            ' Validate CLI path
+            If String.IsNullOrWhiteSpace(txtCliPath.Text) Then
+                txtOutput.Text = "Please set the Arduino CLI path."
+                Return
+            End If
+            ArduinoCliPath = txtCliPath.Text.Trim()
+
+            ' Validate partition scheme
+            If String.IsNullOrEmpty(schemeValue) OrElse Not boardManager.PartitionExists(schemeValue) Then
+                txtOutput.Text = String.Format("Error: Selected partition scheme '{0}' not found. Please select a valid partition scheme.", schemeValue)
+                Return
+            End If
+
+            ' Create compilation options - use the user's selected settings
+            Dim compilationOptions = New Dictionary(Of String, String)(BoardConfigOptions)
+
+            ' Only sanitize for compatibility issues, don't force settings
+            SanitizeBoardOptions(board, compilationOptions)
+
+            ' Generate FQBN using user's selected settings
+            Dim fqbn = boardManager.GetFQBNForCompilation(board, schemeValue, projDir, compilationOptions)
+
+            ' Create export directory
+            Dim exportDir = Path.Combine(projDir, "export")
+            If Not Directory.Exists(exportDir) Then
+                Directory.CreateDirectory(exportDir)
+            End If
+
+            ' Get sketch name for file naming
+            Dim sketchName = Path.GetFileName(projDir)
+            If String.IsNullOrEmpty(sketchName) Then
+                sketchName = "sketch"
+            End If
+
+            ' Update status to indicate export started
+            lblStatus.Text = "<span class='status-indicator pending'><i class='fas fa-spinner fa-spin'></i> Exporting binary files...</span>"
+
+            ' Show the FQBN being used in output
+            bufferList.Add("Executing task: arduino-cli compile with binary export")
+            bufferList.Add(String.Format("Using FQBN: {0}", fqbn))
+            bufferList.Add(String.Format("Export directory: {0}", exportDir))
+            txtOutput.Text = String.Join(Environment.NewLine, bufferList)
+
+            ' Add JavaScript to record start time and reset the UI
+            ScriptManager.RegisterStartupScript(Me, Me.GetType(), "resetExportUI", "
+            window.compileStartTime = Date.now(); 
+            console.log('Binary export started at ' + window.compileStartTime);
+            resetCompilationState();
+            resetAndStartProgress();
+        ", True)
+
+            ' Run binary export with real-time output - using the public method
+            Dim result As ArduinoUtil.ExecResult =
+            ArduinoUtil.RunBinaryExportRealtime(ArduinoCliPath, projDir, fqbn, exportDir,
+                Sub(line)
+                    ' Don't re-declare bufferList here, use the one from outer scope
+                    bufferList.Add(line)
+                    txtOutput.Text = String.Join(Environment.NewLine, bufferList)
+                End Sub)
+
+            ' Update status based on result
+            If result.Success Then
+                bufferList.Add("Compiled and exported binary files successfully")
+
+                ' Find the generated binary files - look in both the export directory and the sketch directory
+                ' Arduino CLI with -e flag exports binaries to the sketch folder
+                Dim binFiles = Directory.GetFiles(exportDir, "*.bin", SearchOption.AllDirectories).ToList()
+                binFiles.AddRange(Directory.GetFiles(projDir, "*.bin", SearchOption.TopDirectoryOnly))
+
+                Dim elfFiles = Directory.GetFiles(exportDir, "*.elf", SearchOption.AllDirectories).ToList()
+                elfFiles.AddRange(Directory.GetFiles(projDir, "*.elf", SearchOption.TopDirectoryOnly))
+
+                Dim hexFiles = Directory.GetFiles(exportDir, "*.hex", SearchOption.AllDirectories).ToList()
+                hexFiles.AddRange(Directory.GetFiles(projDir, "*.hex", SearchOption.TopDirectoryOnly))
+
+                ' Copy the bin, elf, and hex files to the export directory with proper names
+                Dim timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss")
+                Dim successCount = 0
+
+                ' List the exported files
+                bufferList.Add("")
+                bufferList.Add("Exported files:")
+
+                ' Process BIN files
+                For Each binFile In binFiles
+                    Try
+                        Dim destBinFile = Path.Combine(exportDir, String.Format("{0}_{1}.bin", sketchName, timestamp))
+                        File.Copy(binFile, destBinFile, True)
+                        bufferList.Add(String.Format("- BIN: {0}", Path.GetFileName(destBinFile)))
+                        successCount += 1
+                    Catch ex As Exception
+                        bufferList.Add(String.Format("- Error copying BIN file: {0}", ex.Message))
+                    End Try
+                Next
+
+                ' Process ELF files
+                For Each elfFile In elfFiles
+                    Try
+                        Dim destElfFile = Path.Combine(exportDir, String.Format("{0}_{1}.elf", sketchName, timestamp))
+                        File.Copy(elfFile, destElfFile, True)
+                        bufferList.Add(String.Format("- ELF: {0}", Path.GetFileName(destElfFile)))
+                        successCount += 1
+                    Catch ex As Exception
+                        bufferList.Add(String.Format("- Error copying ELF file: {0}", ex.Message))
+                    End Try
+                Next
+
+                ' Process HEX files
+                For Each hexFile In hexFiles
+                    Try
+                        Dim destHexFile = Path.Combine(exportDir, String.Format("{0}_{1}.hex", sketchName, timestamp))
+                        File.Copy(hexFile, destHexFile, True)
+                        bufferList.Add(String.Format("- HEX: {0}", Path.GetFileName(destHexFile)))
+                        successCount += 1
+                    Catch ex As Exception
+                        bufferList.Add(String.Format("- Error copying HEX file: {0}", ex.Message))
+                    End Try
+                Next
+
+                ' Create a ZIP file with all the exported files - with error handling
+                Try
+                    Dim zipPath = Path.Combine(exportDir, String.Format("{0}_{1}_binaries.zip", sketchName, timestamp))
+                    If File.Exists(zipPath) Then
+                        File.Delete(zipPath)
+                    End If
+
+                    ' Create an info file first
+                    Dim tempInfoPath = Path.Combine(exportDir, "export_info.txt")
+                    Using writer As New StreamWriter(tempInfoPath)
+                        writer.WriteLine("ESP32 Firmware Export")
+                        writer.WriteLine(String.Format("Date: {0}", DateTime.Now))
+                        writer.WriteLine(String.Format("Sketch: {0}", sketchName))
+                        writer.WriteLine(String.Format("Board: {0}", board))
+                        writer.WriteLine(String.Format("Partition Scheme: {0}", schemeValue))
+                        writer.WriteLine(String.Format("FQBN: {0}", fqbn))
+                    End Using
+
+                    ' Create a new list of files to include in ZIP
+                    Dim zipFiles As New List(Of String)()
+                    zipFiles.AddRange(binFiles)
+                    zipFiles.AddRange(elfFiles)
+                    zipFiles.AddRange(hexFiles)
+                    zipFiles.Add(tempInfoPath)
+
+                    ' Create the ZIP file
+                    Using zipArchive As ZipArchive = ZipFile.Open(zipPath, ZipArchiveMode.Create)
+                        ' Add all binary files to the ZIP
+                        For Each filePath In zipFiles.Distinct()
+                            If File.Exists(filePath) Then
+                                Dim entryName = Path.GetFileName(filePath)
+                                zipArchive.CreateEntryFromFile(filePath, entryName)
+                            End If
+                        Next
+                    End Using
+
+                    ' Delete temp info file
+                    If File.Exists(tempInfoPath) Then
+                        File.Delete(tempInfoPath)
+                    End If
+
+                    bufferList.Add(String.Format("- ZIP: {0}", Path.GetFileName(zipPath)))
+                    successCount += 1
+                Catch ex As Exception
+                    bufferList.Add(String.Format("- Error creating ZIP file: {0}", ex.Message))
+                    AppendToLog(String.Format("ZIP creation error: {0}", ex.ToString()))
+                End Try
+
+                ' Update the status based on found files
+                If successCount > 0 Then
+                    lblStatus.Text = String.Format("<span class='status-indicator success'><i class='fas fa-check-circle'></i> Binary Export Successful ({0} files)</span>", successCount)
+                    bufferList.Add("")
+                    bufferList.Add(String.Format("Export successful! {0} files exported to {1}", successCount, exportDir))
+
+                    ' Add script to show success alert
+                    ScriptManager.RegisterStartupScript(Me, Me.GetType(), "exportSuccess", String.Format("
+                    showNotification('Export Successful', '{0} binary files have been exported to {1}', 'success');
+                ", successCount, exportDir.Replace("\", "\\")), True)
+                Else
+                    lblStatus.Text = "<span class='status-indicator warning'><i class='fas fa-exclamation-triangle'></i> Export Completed (No Files Found)</span>"
+                    bufferList.Add("")
+                    bufferList.Add("No binary files were found after compilation. Check the output for errors.")
+
+                    ' Add script to show warning alert
+                    ScriptManager.RegisterStartupScript(Me, Me.GetType(), "exportWarning", "
+                    showNotification('Export Completed', 'No binary files were found after compilation. Check the output for details.', 'info');
+                ", True)
+                End If
+            Else
+                bufferList.Add("Export failed")
+                lblStatus.Text = "<span class='status-indicator error'><i class='fas fa-exclamation-circle'></i> Export Failed</span>"
+
+                ' Add script to show error alert
+                ScriptManager.RegisterStartupScript(Me, Me.GetType(), "exportFailed", "
+                showNotification('Export Failed', 'Failed to export binary files. Check the error message in the output.', 'error');
+            ", True)
+            End If
+
+            ' Update output text
+            txtOutput.Text = String.Join(Environment.NewLine, bufferList)
+
+        Catch ex As Exception
+            AppendToLog(String.Format("Binary export error: {0}", ex.ToString()))
+            txtOutput.Text = String.Format("Error during binary export: {0}", ex.Message)
+            lblStatus.Text = "<span class='status-indicator error'><i class='fas fa-exclamation-circle'></i> Export Failed - Exception</span>"
+
+            ' Show error notification
+            ScriptManager.RegisterStartupScript(Me, Me.GetType(), "exportExceptionError", String.Format("
+            showNotification('Export Error', 'An error occurred: {0}', 'error');
+        ", ex.Message.Replace("'", "\\'").Replace(Environment.NewLine, " ")), True)
+        End Try
+    End Sub
+
+    Protected Sub btnUploadBinary_Click(sender As Object, e As EventArgs)
+        Try
+            ' Capture and save the latest board configurations before uploading
+            CaptureBoardOptionsFromUI()
+            UpdateFQBNPreview()
+
+            ' Initialize the output buffer once
+            Dim bufferList As List(Of String) = OutputBuffer
+            bufferList.Clear()
+            txtOutput.Text = ""
+
+            ' Check if a binary file has been uploaded or selected
+            Dim binaryFilePath As String = txtBinaryPath.Text.Trim()
+
+            ' If no binary file is already selected, check if one is being uploaded
+            If String.IsNullOrEmpty(binaryFilePath) AndAlso fuBinaryZip.HasFile Then
+                ' Get the uploaded file
+                Dim fileExtension = Path.GetExtension(fuBinaryZip.FileName).ToLower()
+
+                ' Check if it's a valid binary or zip file
+                If Not (fileExtension = ".bin" OrElse fileExtension = ".hex" OrElse fileExtension = ".elf" OrElse fileExtension = ".zip") Then
+                    txtOutput.Text = "Error: Only .bin, .hex, .elf, or .zip files are allowed for binary upload."
+                    Return
+                End If
+
+                ' Display file size for debugging
+                Dim fileSize As Long = fuBinaryZip.PostedFile.ContentLength
+                AppendToLog(String.Format("Uploading file: {0}, Size: {1:N0} bytes", fuBinaryZip.FileName, fileSize))
+
+                ' Create a temp directory to save the file
+                Dim tempDir = Path.Combine(Server.MapPath("~/App_Data"), "TempBinary_" + DateTime.Now.Ticks.ToString())
+                If Not Directory.Exists(tempDir) Then
+                    Directory.CreateDirectory(tempDir)
+                End If
+
+                ' Update UI to show progress
+                bufferList.Add(String.Format("Uploading file: {0} ({1:N0} bytes)...", fuBinaryZip.FileName, fileSize))
+                txtOutput.Text = String.Join(Environment.NewLine, bufferList)
+
+                ' Save the uploaded file - with try/catch for better error handling
+                Try
+                    binaryFilePath = Path.Combine(tempDir, fuBinaryZip.FileName)
+                    fuBinaryZip.SaveAs(binaryFilePath)
+                    txtBinaryPath.Text = binaryFilePath
+                    bufferList.Add(String.Format("File saved successfully to: {0}", binaryFilePath))
+                Catch ex As Exception
+                    bufferList.Add(String.Format("Error saving file: {0}", ex.Message))
+                    AppendToLog(String.Format("Error saving file: {0}", ex.ToString()))
+                    txtOutput.Text = String.Join(Environment.NewLine, bufferList)
+                    Return
+                End Try
+
+                ' If it's a ZIP file, extract it
+                If fileExtension = ".zip" Then
+                    Try
+                        bufferList.Add("Extracting ZIP file...")
+                        txtOutput.Text = String.Join(Environment.NewLine, bufferList)
+
+                        Dim extractDir = Path.Combine(tempDir, "extracted")
+                        Directory.CreateDirectory(extractDir)
+
+                        ' Use more robust extraction for larger files
+                        Using archive As ZipArchive = ZipFile.OpenRead(binaryFilePath)
+                            bufferList.Add(String.Format("ZIP contains {0} files", archive.Entries.Count))
+
+                            For Each entry As ZipArchiveEntry In archive.Entries
+                                Dim destinationPath = Path.Combine(extractDir, entry.FullName)
+                                Dim destinationDir = Path.GetDirectoryName(destinationPath)
+
+                                If Not String.IsNullOrEmpty(destinationDir) AndAlso Not Directory.Exists(destinationDir) Then
+                                    Directory.CreateDirectory(destinationDir)
+                                End If
+
+                                If Not String.IsNullOrEmpty(entry.Name) Then
+                                    entry.ExtractToFile(destinationPath, True)
+                                End If
+                            Next
+                        End Using
+
+                        bufferList.Add("ZIP file extracted successfully")
+                        txtOutput.Text = String.Join(Environment.NewLine, bufferList)
+
+                        ' Look for binary files in the extracted directory
+                        Dim binFiles = Directory.GetFiles(extractDir, "*.bin", SearchOption.AllDirectories)
+                        Dim hexFiles = Directory.GetFiles(extractDir, "*.hex", SearchOption.AllDirectories)
+                        Dim elfFiles = Directory.GetFiles(extractDir, "*.elf", SearchOption.AllDirectories)
+
+                        bufferList.Add(String.Format("Found: {0} .bin files, {1} .hex files, {2} .elf files",
+                                               binFiles.Length, hexFiles.Length, elfFiles.Length))
+
+                        ' Prioritize bin files, then hex, then elf
+                        If binFiles.Length > 0 Then
+                            binaryFilePath = binFiles(0)
+                            bufferList.Add(String.Format("Using .bin file: {0}", Path.GetFileName(binaryFilePath)))
+                        ElseIf hexFiles.Length > 0 Then
+                            binaryFilePath = hexFiles(0)
+                            bufferList.Add(String.Format("Using .hex file: {0}", Path.GetFileName(binaryFilePath)))
+                        ElseIf elfFiles.Length > 0 Then
+                            binaryFilePath = elfFiles(0)
+                            bufferList.Add(String.Format("Using .elf file: {0}", Path.GetFileName(binaryFilePath)))
+                        Else
+                            bufferList.Add("Error: No binary files found in the ZIP archive.")
+                            txtOutput.Text = String.Join(Environment.NewLine, bufferList)
+                            Return
+                        End If
+
+                        txtBinaryPath.Text = binaryFilePath
+                    Catch ex As Exception
+                        bufferList.Add(String.Format("Error extracting ZIP file: {0}", ex.Message))
+                        AppendToLog(String.Format("Error extracting ZIP: {0}", ex.ToString()))
+                        txtOutput.Text = String.Join(Environment.NewLine, bufferList)
+                        Return
+                    End Try
+                End If
+            ElseIf String.IsNullOrEmpty(binaryFilePath) Then
+                txtOutput.Text = "Error: Please select a binary file to upload."
+                Return
+            ElseIf Not File.Exists(binaryFilePath) Then
+                txtOutput.Text = String.Format("Error: The binary file '{0}' does not exist.", binaryFilePath)
+                Return
+            End If
+
+            ' Get selected board and partition scheme
+            Dim board = ddlBoard.SelectedValue
+            Dim partitionScheme = ddlPartition.SelectedValue
+            Dim serialPort = ddlSerial.SelectedValue
+            Dim verifyUpload = chkVerifyUpload.Checked
+
+            ' Validate serial port
+            If String.IsNullOrEmpty(serialPort) Then
+                txtOutput.Text = "Error: No serial port available. Please connect your board and refresh ports."
+                Return
+            End If
+
+            ' Validate CLI path
+            If String.IsNullOrWhiteSpace(txtCliPath.Text) Then
+                txtOutput.Text = "Error: Please set the Arduino CLI path."
+                Return
+            End If
+            ArduinoCliPath = txtCliPath.Text.Trim()
+
+            ' Create compilation options for FQBN
+            Dim compilationOptions = New Dictionary(Of String, String)(BoardConfigOptions)
+            SanitizeBoardOptions(board, compilationOptions)
+
+            ' Generate FQBN using user's selected settings
+            Dim fqbn = boardManager.GetFQBNForCompilation(board, partitionScheme, "", compilationOptions)
+
+            ' Clear the buffer again before starting upload
+            bufferList.Clear()
+            txtOutput.Text = ""
+
+            ' Update status to indicate upload started
+            lblStatus.Text = "<span class='status-indicator pending'><i class='fas fa-spinner fa-spin'></i> Uploading Binary...</span>"
+
+            ' Show the information about the upload
+            bufferList.Add("Executing task: Upload binary file directly to board")
+            bufferList.Add(String.Format("Binary file: {0}", Path.GetFileName(binaryFilePath)))
+            bufferList.Add(String.Format("Board: {0}", board))
+            bufferList.Add(String.Format("FQBN: {0}", fqbn))
+            bufferList.Add(String.Format("Port: {0}", serialPort))
+            bufferList.Add(String.Format("Verify after upload: {0}", verifyUpload))
+            bufferList.Add("Starting upload...")
+            txtOutput.Text = String.Join(Environment.NewLine, bufferList)
+
+            ' Register progress tracking script
+            ScriptManager.RegisterStartupScript(Me, Me.GetType(), "resetUploadBinaryUI", "
+            window.compileStartTime = Date.now(); 
+            console.log('Binary upload started at ' + window.compileStartTime);
+            resetCompilationState();
+            resetAndStartProgress();
+        ", True)
+
+            ' Run the binary upload with real-time output
+            Dim result As ArduinoUtil.ExecResult =
+            ArduinoUtil.RunBinaryUploadRealtime(ArduinoCliPath, binaryFilePath, fqbn, serialPort, verifyUpload,
+                Sub(line)
+                    ' Don't re-declare bufferList here, use the one from outer scope
+                    bufferList.Add(line)
+                    txtOutput.Text = String.Join(Environment.NewLine, bufferList)
+                End Sub)
+
+            ' Update status based on result
+            If result.Success Then
+                bufferList.Add("Binary upload completed successfully")
+
+                ' Check output for verification success
+                Dim verificationSuccessful = True
+                If verifyUpload Then
+                    If result.Output.Contains("Verify Failed") OrElse
+                   result.Output.Contains("verification error") OrElse
+                   result.Output.Contains("verify failed") Then
+                        verificationSuccessful = False
+                        bufferList.Add("WARNING: Upload verification failed! The binary may not have been uploaded correctly.")
+                    Else
+                        bufferList.Add("Upload verification successful. Binary file matches device memory.")
+                    End If
+                End If
+
+                ' Final status message
+                If verifyUpload AndAlso Not verificationSuccessful Then
+                    lblStatus.Text = "<span class='status-indicator warning'><i class='fas fa-exclamation-triangle'></i> Upload Completed but Verification Failed</span>"
+
+                    ' Show warning notification
+                    ScriptManager.RegisterStartupScript(Me, Me.GetType(), "uploadVerifyFailed", "
+                    showNotification('Upload Completed', 'Binary was uploaded but verification failed. The binary may not match the device memory.', 'warning');
+                ", True)
+                Else
+                    lblStatus.Text = "<span class='status-indicator success'><i class='fas fa-check-circle'></i> Binary Upload Successful</span>"
+
+                    ' Show success notification
+                    ScriptManager.RegisterStartupScript(Me, Me.GetType(), "uploadBinarySuccess", "
+                    showNotification('Upload Successful', 'Binary file has been uploaded to the ESP32 device successfully.', 'success');
+                ", True)
+                End If
+
+                ' Add extra information about the board configuration
+                bufferList.Add("")
+                bufferList.Add("Board Configuration Summary:")
+                bufferList.Add(String.Format("- Board: {0}", board))
+                bufferList.Add(String.Format("- Partition Scheme: {0}", partitionScheme))
+
+                ' Add specific board options - Fixed the For Each loop syntax
+                If compilationOptions.Count > 0 Then
+                    bufferList.Add("- Board Options:")
+                    For Each kvp As KeyValuePair(Of String, String) In compilationOptions
+                        bufferList.Add(String.Format("  • {0}: {1}", boardManager.GetOptionName(kvp.Key), kvp.Value))
+                    Next
+                End If
+
+                bufferList.Add(String.Format("- Binary File: {0}", Path.GetFileName(binaryFilePath)))
+
+                ' Use correct format for file size
+                Dim fileSize As Long = New FileInfo(binaryFilePath).Length
+                bufferList.Add(String.Format("- File Size: {0:N0} bytes", fileSize))
+
+                ' Calculate upload time
+                Dim uploadTimeSeconds As Double = Math.Round((DateTime.Now - DateTime.Now.AddMilliseconds(-Environment.TickCount)).TotalSeconds, 1)
+                bufferList.Add(String.Format("- Upload Time: {0} seconds", uploadTimeSeconds))
+
+            Else
+                bufferList.Add("Binary upload failed")
+                lblStatus.Text = "<span class='status-indicator error'><i class='fas fa-exclamation-circle'></i> Binary Upload Failed</span>"
+
+                ' Try to analyze the error for common issues
+                Dim errorMsg = "Check the error message in the output"
+
+                If result.Output.Contains("No such file or directory") Then
+                    errorMsg = "Binary file not found or CLI path incorrect"
+                ElseIf result.Output.Contains("Cannot open") AndAlso result.Output.Contains(serialPort) Then
+                    errorMsg = String.Format("Cannot open serial port {0}. Port may be in use or unavailable", serialPort)
+                ElseIf result.Output.Contains("Invalid board") Then
+                    errorMsg = "Invalid board or FQBN configuration"
+                End If
+
+                ' Show error notification
+                ScriptManager.RegisterStartupScript(Me, Me.GetType(), "uploadBinaryFailed", String.Format("
+                showNotification('Upload Failed', 'Failed to upload binary file. {0}.', 'error');
+            ", errorMsg), True)
+            End If
+
+            ' Update output text
+            txtOutput.Text = String.Join(Environment.NewLine, bufferList)
+
+        Catch ex As Exception
+            ' Global exception handler
+            AppendToLog(String.Format("Binary upload error: {0}", ex.ToString()))
+            txtOutput.Text = String.Format("Error during binary upload: {0}", ex.Message)
+            lblStatus.Text = "<span class='status-indicator error'><i class='fas fa-exclamation-circle'></i> Upload Failed - Exception</span>"
+
+            ' Show error notification
+            ScriptManager.RegisterStartupScript(Me, Me.GetType(), "uploadExceptionError", String.Format("
+            showNotification('Upload Error', 'An error occurred: {0}', 'error');
+        ", ex.Message.Replace("'", "\\'").Replace(Environment.NewLine, " ")), True)
+        End Try
+    End Sub
+
+    ' Handle binary file selection
+    Protected Sub fuBinaryZip_Change(sender As Object, e As EventArgs)
+        If fuBinaryZip.HasFile Then
+            txtBinaryPath.Text = fuBinaryZip.FileName
+
+            ' Add UI notification
+            ScriptManager.RegisterStartupScript(Me, Me.GetType(), "binaryFileSelected", String.Format("
+            showNotification('File Selected', 'Binary file {0} selected for upload.', 'info');
+        ", fuBinaryZip.FileName), True)
+        End If
     End Sub
 
     Protected Sub btnUploadSingleSketch_Click(sender As Object, e As EventArgs)
