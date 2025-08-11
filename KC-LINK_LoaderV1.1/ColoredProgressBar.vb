@@ -1,9 +1,8 @@
-﻿Imports System.Windows.Forms
+Imports System.Windows.Forms
 Imports System.Drawing
 Imports System.Drawing.Drawing2D
 Imports System.ComponentModel
 
-' Use a unique namespace for your project
 Namespace KC_LINK_LoaderV1
     Public Class ColoredProgressBar
         Inherits Control
@@ -17,11 +16,12 @@ Namespace KC_LINK_LoaderV1
 
         Public Sub New()
             MyBase.New()
+            ' Enable double-buffering and other optimizations
             Me.SetStyle(ControlStyles.UserPaint Or
-                        ControlStyles.AllPaintingInWmPaint Or
-                        ControlStyles.OptimizedDoubleBuffer Or
-                        ControlStyles.ResizeRedraw Or
-                        ControlStyles.SupportsTransparentBackColor, True)
+                      ControlStyles.AllPaintingInWmPaint Or
+                      ControlStyles.OptimizedDoubleBuffer Or
+                      ControlStyles.ResizeRedraw Or
+                      ControlStyles.SupportsTransparentBackColor, True)
 
             Me.BackColor = SystemColors.Control
             Me.ForeColor = Color.Black
@@ -35,14 +35,17 @@ Namespace KC_LINK_LoaderV1
                 Return m_value
             End Get
             Set(value As Integer)
+                ' Constrain to min/max
                 If value < m_minimum Then
                     value = m_minimum
                 ElseIf value > m_maximum Then
                     value = m_maximum
                 End If
+
+                ' Only invalidate if changed
                 If m_value <> value Then
                     m_value = value
-                    Invalidate(False)
+                    Invalidate(False) ' False = only invalidate client area
                 End If
             End Set
         End Property
@@ -55,6 +58,7 @@ Namespace KC_LINK_LoaderV1
             End Get
             Set(value As Integer)
                 If value < m_minimum Then value = m_minimum
+
                 If m_maximum <> value Then
                     m_maximum = value
                     If m_value > m_maximum Then m_value = m_maximum
@@ -71,6 +75,7 @@ Namespace KC_LINK_LoaderV1
             End Get
             Set(value As Integer)
                 If value > m_maximum Then value = m_maximum
+
                 If m_minimum <> value Then
                     m_minimum = value
                     If m_value < m_minimum Then m_value = m_minimum
@@ -112,6 +117,7 @@ Namespace KC_LINK_LoaderV1
             Dim g As Graphics = e.Graphics
             Dim rect As Rectangle = ClientRectangle
 
+            ' Anti-aliasing for smoother appearance
             g.SmoothingMode = SmoothingMode.AntiAlias
             g.InterpolationMode = InterpolationMode.HighQualityBicubic
 
@@ -122,23 +128,27 @@ Namespace KC_LINK_LoaderV1
 
             ' Calculate progress width
             Dim range As Integer = m_maximum - m_minimum
-            If range <= 0 Then range = 1
+            If range <= 0 Then range = 1 ' Prevent division by zero
 
             Dim percentage As Double = CDbl(m_value - m_minimum) / range
             Dim progressWidth As Integer = CInt(Math.Floor(rect.Width * percentage))
 
+            ' Draw progress bar only if there's something to draw
             If progressWidth > 0 Then
+                ' Create rectangle for the progress part
                 Dim progressRect As New Rectangle(rect.X, rect.Y, progressWidth, rect.Height)
 
-                ' Draw gradient fill
+                ' Draw gradient fill for progress bar
                 Using barBrush As New LinearGradientBrush(
                     progressRect,
-                    Color.FromArgb(m_barColor.R, m_barColor.G, m_barColor.B, 230),
+                    Color.FromArgb(m_barColor.R, m_barColor.G, m_barColor.B, 230),  ' Slightly transparent version
                     m_barColor,
                     LinearGradientMode.Vertical)
+
                     g.FillRectangle(barBrush, progressRect)
                 End Using
 
+                ' Add light bevel effect for 3D look
                 Using lightPen As New Pen(Color.FromArgb(60, 255, 255, 255), 1)
                     g.DrawLine(lightPen, progressRect.X, progressRect.Y, progressRect.Right, progressRect.Y)
                     g.DrawLine(lightPen, progressRect.X, progressRect.Y, progressRect.X, progressRect.Bottom)
@@ -167,10 +177,12 @@ Namespace KC_LINK_LoaderV1
                     textSize.Width,
                     textSize.Height)
 
+                ' Use a shadow for better readability
                 Using shadowBrush As New SolidBrush(Color.FromArgb(80, 0, 0, 0))
                     g.DrawString(text, Me.Font, shadowBrush, textRect.X + 1, textRect.Y + 1)
                 End Using
 
+                ' Draw actual text
                 Using textBrush As New SolidBrush(Me.ForeColor)
                     g.DrawString(text, Me.Font, textBrush, textRect.X, textRect.Y)
                 End Using
