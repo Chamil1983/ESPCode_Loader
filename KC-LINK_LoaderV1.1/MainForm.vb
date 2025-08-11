@@ -1,4 +1,4 @@
-﻿Imports System
+Imports System
 Imports System.Collections.Generic
 Imports System.ComponentModel
 Imports System.Diagnostics
@@ -7,9 +7,9 @@ Imports System.Drawing.Drawing2D
 Imports System.IO
 Imports System.Net.NetworkInformation
 Imports System.Text.RegularExpressions
+Imports System.Threading
 Imports System.Threading.Tasks
 Imports System.Windows.Forms
-
 
 Public Class MainForm
     Inherits Form
@@ -21,15 +21,20 @@ Public Class MainForm
     Private compilationOutput As String = String.Empty
     Private isCompiling As Boolean = False
     Private isUploading As Boolean = False
+    Private builderExitCode As Integer = 0
     Private WithEvents serialMonitorTool As SerialMonitor
     Private hardwareStats As HardwareStats
     Private boardConfigManager As BoardManager
-    Private WithEvents outputRefreshTimer As New Timer() With {
-        .Interval = 250,
-        .Enabled = False
-    }
+    Private WithEvents outputRefreshTimer As New System.Windows.Forms.Timer() With {
+    .Interval = 250,
+    .Enabled = False
+}
     Private lastOutputLine As String = String.Empty
     Private compilationStartTime As DateTime
+
+    ' Add fields for progress bar flashing
+    Private isFlashingProgressBar As Boolean = False
+    Private progressFlashTimer As New System.Windows.Forms.Timer()
 
     ' Add fields for enhanced compilation progress tracking
     Private compileOutputLines As New List(Of String)
@@ -37,7 +42,7 @@ Public Class MainForm
     Private compilationPhase As String = ""
     Private expectedSteps As Integer = 10  ' ESP32 compilation typically has ~10 steps
     Private currentStep As Integer = 0
-    Private builderExitCode As Integer = 0
+
 
     ' UI Controls Declaration
     Private WithEvents txtProjectPath As TextBox
@@ -53,10 +58,8 @@ Public Class MainForm
     Private WithEvents cmbPartitionOption As ComboBox
     Private WithEvents btnConfigPath As Button
     Private WithEvents buildProgressBar As ProgressBar
-    'Private WithEvents flashUsageBar As ProgressBar
-    'Private WithEvents ramUsageBar As ProgressBar
-    Private flashUsageBar As ColoredProgressBar
-    Private ramUsageBar As ColoredProgressBar
+    Private WithEvents flashUsageBar As ColoredProgressBar
+    Private WithEvents ramUsageBar As ColoredProgressBar
     Private WithEvents lblFlashUsage As Label
     Private WithEvents lblRAMUsage As Label
     Private WithEvents lblCompileTime As Label
@@ -71,6 +74,10 @@ Public Class MainForm
     Private WithEvents toolStripStatusLabel As ToolStripStatusLabel
     Private WithEvents toolStripProgressBar As ToolStripProgressBar
 
+    ' NEW: Add buttons for zip and binary upload
+    Private WithEvents btnZipUpload As Button
+    Private WithEvents btnBinaryUpload As Button
+
     ' Menu controls
     Private WithEvents mnuMain As MenuStrip
     Private WithEvents mnuFile As ToolStripMenuItem
@@ -83,6 +90,10 @@ Public Class MainForm
     Private WithEvents mnuLoadBoardsFile As ToolStripMenuItem
     Private WithEvents mnuBoardSettings As ToolStripMenuItem
     Private WithEvents mnuAbout As ToolStripMenuItem
+
+    ' NEW: Add menu items for zip and binary upload
+    Private WithEvents mnuZipUpload As ToolStripMenuItem
+    Private WithEvents mnuBinaryUpload As ToolStripMenuItem
 
     Public Sub New()
         ' Initialize components
@@ -115,10 +126,8 @@ Public Class MainForm
         ' Load settings
         LoadSettings()
 
-        RefreshProgressBarColors()
-
         ' Log startup info
-        LogMessage($"Application started by Chamil1983 at UTC 2025-06-20 04:26:24")
+        LogMessage($"Application started by Chamil1983 at UTC 2025-08-11 03:04:58")
     End Sub
 
     Private Sub InitializeComponent()
@@ -228,7 +237,7 @@ Public Class MainForm
         ' Create action buttons with FlowLayoutPanel
         btnCompile = New Button()
         btnCompile.Text = "Compile"
-        btnCompile.Size = New Size(120, 40)
+        btnCompile.Size = New Size(120, 30)
         btnCompile.BackColor = Color.LightBlue
         btnCompile.FlatStyle = FlatStyle.Standard
         btnCompile.Font = New Font("Microsoft Sans Serif", 9, FontStyle.Bold)
@@ -236,15 +245,33 @@ Public Class MainForm
 
         btnUpload = New Button()
         btnUpload.Text = "Upload"
-        btnUpload.Size = New Size(120, 40)
+        btnUpload.Size = New Size(120, 30)
         btnUpload.BackColor = Color.LightGreen
         btnUpload.FlatStyle = FlatStyle.Standard
         btnUpload.Font = New Font("Microsoft Sans Serif", 9, FontStyle.Bold)
         btnUpload.Margin = New Padding(5)
 
+        ' NEW: Create Zip Upload button
+        btnZipUpload = New Button()
+        btnZipUpload.Text = "Zip Upload"
+        btnZipUpload.Size = New Size(120, 30)
+        btnZipUpload.BackColor = Color.LightYellow
+        btnZipUpload.FlatStyle = FlatStyle.Standard
+        btnZipUpload.Font = New Font("Microsoft Sans Serif", 9, FontStyle.Bold)
+        btnZipUpload.Margin = New Padding(5)
+
+        ' NEW: Create Binary Upload button
+        btnBinaryUpload = New Button()
+        btnBinaryUpload.Text = "Binary Upload"
+        btnBinaryUpload.Size = New Size(120, 30)
+        btnBinaryUpload.BackColor = Color.LightCoral
+        btnBinaryUpload.FlatStyle = FlatStyle.Standard
+        btnBinaryUpload.Font = New Font("Microsoft Sans Serif", 9, FontStyle.Bold)
+        btnBinaryUpload.Margin = New Padding(5)
+
         btnMonitor = New Button()
         btnMonitor.Text = "Serial Monitor"
-        btnMonitor.Size = New Size(140, 40)
+        btnMonitor.Size = New Size(140, 30)
         btnMonitor.BackColor = Color.LightYellow
         btnMonitor.FlatStyle = FlatStyle.Standard
         btnMonitor.Font = New Font("Microsoft Sans Serif", 9, FontStyle.Bold)
@@ -252,7 +279,7 @@ Public Class MainForm
 
         btnSettings = New Button()
         btnSettings.Text = "Settings"
-        btnSettings.Size = New Size(120, 40)
+        btnSettings.Size = New Size(120, 30)
         btnSettings.BackColor = Color.LightGray
         btnSettings.FlatStyle = FlatStyle.Standard
         btnSettings.Font = New Font("Microsoft Sans Serif", 9, FontStyle.Bold)
@@ -264,12 +291,14 @@ Public Class MainForm
         actionPanel.FlowDirection = FlowDirection.LeftToRight
         actionPanel.WrapContents = False
         actionPanel.AutoSize = True
-        actionPanel.Padding = New Padding(5)
-        actionPanel.Margin = New Padding(0, 5, 0, 5)
+        actionPanel.Padding = New Padding(3)
+        actionPanel.Margin = New Padding(0, 3, 0, 3)
 
-        ' Add buttons to the panel
+        ' Add buttons to the panel (including new Zip and Binary Upload buttons)
         actionPanel.Controls.Add(btnCompile)
         actionPanel.Controls.Add(btnUpload)
+        actionPanel.Controls.Add(btnZipUpload)
+        actionPanel.Controls.Add(btnBinaryUpload)
         actionPanel.Controls.Add(btnMonitor)
         actionPanel.Controls.Add(btnSettings)
 
@@ -384,30 +413,32 @@ Public Class MainForm
         lblFlashUsage.Dock = DockStyle.Fill
         lblFlashUsage.Margin = New Padding(3)
 
+        ' Use custom ColoredProgressBar instead of standard ProgressBar
         flashUsageBar = New ColoredProgressBar()
         flashUsageBar.Minimum = 0
         flashUsageBar.Maximum = 100
         flashUsageBar.Value = 0
-        flashUsageBar.Height = 15
+        flashUsageBar.Height = 18
         flashUsageBar.Dock = DockStyle.Fill
-        flashUsageBar.BarColor = Color.RoyalBlue ' default
-
-
+        flashUsageBar.Margin = New Padding(3)
+        flashUsageBar.BarColor = Color.RoyalBlue
+        flashUsageBar.ShowPercentText = True
 
         lblRAMUsage = New Label()
         lblRAMUsage.Text = "RAM: 0 bytes (0%)"
         lblRAMUsage.Dock = DockStyle.Fill
         lblRAMUsage.Margin = New Padding(3)
 
+        ' Use custom ColoredProgressBar for RAM too
         ramUsageBar = New ColoredProgressBar()
         ramUsageBar.Minimum = 0
         ramUsageBar.Maximum = 100
         ramUsageBar.Value = 0
-        ramUsageBar.Height = 15
+        ramUsageBar.Height = 18
         ramUsageBar.Dock = DockStyle.Fill
-        ramUsageBar.BarColor = Color.Orange ' default
-
-
+        ramUsageBar.Margin = New Padding(3)
+        ramUsageBar.BarColor = Color.MediumPurple
+        ramUsageBar.ShowPercentText = True
 
         lblCompileTime = New Label()
         lblCompileTime.Text = "Last compile: 0.0 seconds"
@@ -475,6 +506,10 @@ Public Class MainForm
         ' Add main layout to form
         MyBase.Controls.Add(mainLayout)
 
+        ' Set up progress flash timer
+        progressFlashTimer.Interval = 250  ' 250ms flash rate
+        AddHandler progressFlashTimer.Tick, AddressOf ProgressFlashTimer_Tick
+
         ' Set up event handlers
         AddHandler MyBase.Load, AddressOf MainForm_Load
         AddHandler btnBrowseProject.Click, AddressOf btnBrowseProject_Click
@@ -484,6 +519,9 @@ Public Class MainForm
         AddHandler btnMonitor.Click, AddressOf btnMonitor_Click
         AddHandler btnRefreshPorts.Click, AddressOf btnRefreshPorts_Click
         AddHandler btnConfigPath.Click, AddressOf btnConfigPath_Click
+        ' NEW: Add event handlers for the new buttons
+        AddHandler btnZipUpload.Click, AddressOf btnZipUpload_Click
+        AddHandler btnBinaryUpload.Click, AddressOf btnBinaryUpload_Click
         AddHandler cmbBoardType.SelectedIndexChanged, AddressOf cmbBoardType_SelectedIndexChanged
         AddHandler cmbPartitionOption.SelectedIndexChanged, AddressOf cmbPartitionOption_SelectedIndexChanged
         AddHandler MyBase.FormClosing, AddressOf MainForm_FormClosing
@@ -498,10 +536,17 @@ Public Class MainForm
         mnuFile = New ToolStripMenuItem("File")
         mnuOpenProject = New ToolStripMenuItem("Open Project...", Nothing, AddressOf mnuOpenProject_Click)
         mnuRecentProjects = New ToolStripMenuItem("Recent Projects")
+        ' NEW: Add menu items for zip and binary upload
+        mnuZipUpload = New ToolStripMenuItem("Zip Upload...", Nothing, AddressOf mnuZipUpload_Click)
+        mnuBinaryUpload = New ToolStripMenuItem("Binary Upload...", Nothing, AddressOf mnuBinaryUpload_Click)
         mnuExit = New ToolStripMenuItem("Exit", Nothing, AddressOf mnuExit_Click)
 
+        ' Add menu items including the new ones
         mnuFile.DropDownItems.Add(mnuOpenProject)
         mnuFile.DropDownItems.Add(mnuRecentProjects)
+        mnuFile.DropDownItems.Add(New ToolStripSeparator())
+        mnuFile.DropDownItems.Add(mnuZipUpload)
+        mnuFile.DropDownItems.Add(mnuBinaryUpload)
         mnuFile.DropDownItems.Add(New ToolStripSeparator())
         mnuFile.DropDownItems.Add(mnuExit)
 
@@ -535,7 +580,7 @@ Public Class MainForm
     End Sub
 
     Private Sub MainForm_Load(sender As Object, e As EventArgs)
-        LogMessage("Application started at 2025-06-20 04:26:24")
+        LogMessage("Application started at 2025-08-11 03:04:58")
         UpdateStatusBar("Checking Arduino CLI configuration...")
         CheckArduinoCLI()
         RefreshPortList()
@@ -601,7 +646,7 @@ Public Class MainForm
 
         ' Default Arduino CLI location
         If String.IsNullOrEmpty(My.Settings.ArduinoCliPath) Then
-            My.Settings.ArduinoCliPath = Path.Combine(Application.StartupPath, "C:\Users\gen_rms_testroom\Documents\Arduino\Arduino CLI\arduino-cli.exe")
+            My.Settings.ArduinoCliPath = Path.Combine(Application.StartupPath, "C:\Users\chami\bin\arduino-cli.exe")
             My.Settings.Save()
         End If
     End Sub
@@ -700,11 +745,11 @@ Public Class MainForm
             Return
         End If
 
-        ' Use the instance variable boardConfigManager that's already defined in MainForm class
+        ' Use the instance variable boardConfigManager
         Dim configDialog As New BoardConfigDialog(boardConfigManager, cmbBoardType.SelectedItem.ToString())
 
         If configDialog.ShowDialog() = DialogResult.OK Then
-            LogMessage($"[2025-06-20 04:26:24] Board configuration updated by Chamil1983")
+            LogMessage($"[2025-08-11 03:04:58] Board configuration updated by Chamil1983")
             UpdateStatusBar("Board configuration updated")
 
             ' Refresh board list to show any changes
@@ -738,7 +783,7 @@ Public Class MainForm
             My.Settings.LastUsedPartition = selectedPartition
             My.Settings.Save()
 
-            LogMessage($"[2025-06-20 04:26:24] Applied configuration for {selectedBoard} with partition {selectedPartition} by Chamil1983")
+            LogMessage($"[2025-08-11 03:04:58] Applied configuration for {selectedBoard} with partition {selectedPartition} by Chamil1983")
         End If
     End Sub
 
@@ -808,15 +853,6 @@ Public Class MainForm
         End If
     End Sub
 
-    Private Sub RefreshProgressBarColors()
-        ' Force redraw of progress bars with current values
-        flashUsageBar.Invalidate()
-        ramUsageBar.Invalidate()
-
-        ' Log the color update
-        LogMessage($"[2025-06-20 23:28:55] UI updated by Chamil1983")
-    End Sub
-
     Private Sub cmbBoardType_SelectedIndexChanged(sender As Object, e As EventArgs)
         ' Update the partition scheme based on the selected board
         Dim selectedBoard = cmbBoardType.SelectedItem.ToString()
@@ -829,13 +865,13 @@ Public Class MainForm
             End If
         End If
 
-        LogMessage($"[2025-06-20 04:26:24] Selected board: {selectedBoard}, default partition: {defaultPartition}")
+        LogMessage($"[2025-08-11 03:04:58] Selected board: {selectedBoard}, default partition: {defaultPartition}")
         UpdateStatusBar($"Selected board: {selectedBoard}")
     End Sub
 
     Private Sub cmbPartitionOption_SelectedIndexChanged(sender As Object, e As EventArgs)
         Dim selectedPartition = cmbPartitionOption.SelectedItem.ToString()
-        LogMessage($"[2025-06-20 04:26:24] Selected partition scheme: {selectedPartition}")
+        LogMessage($"[2025-08-11 03:04:58] Selected partition scheme: {selectedPartition}")
 
         ' If "custom" is selected, prompt for custom partition file
         If selectedPartition = "custom" Then
@@ -846,7 +882,7 @@ Public Class MainForm
                 If openFileDialog.ShowDialog() = DialogResult.OK Then
                     ' Set custom partition file
                     boardConfigManager.SetCustomPartitionFile(openFileDialog.FileName)
-                    LogMessage("[2025-06-20 04:26:24] Custom partition file selected: " & Path.GetFileName(openFileDialog.FileName))
+                    LogMessage("[2025-08-11 03:04:58] Custom partition file selected: " & Path.GetFileName(openFileDialog.FileName))
                     UpdateStatusBar("Custom partition file loaded")
                 Else
                     ' User cancelled, select default
@@ -966,8 +1002,23 @@ Public Class MainForm
             ' Start upload in background
             workerThread.RunWorkerAsync("upload")
 
-            LogMessage($"[2025-06-20 04:26:24] Started upload to {cmbSerialPort.SelectedItem.ToString()} by Chamil1983")
+            LogMessage($"[2025-08-11 03:04:58] Started upload to {cmbSerialPort.SelectedItem.ToString()} by Chamil1983")
         End If
+    End Sub
+
+    ' NEW: Handler for Zip Upload button
+    Private Sub btnZipUpload_Click(sender As Object, e As EventArgs)
+        ' Open the Zip Upload form
+        Dim zipUploadForm As New KC_LINK_LoaderV1.ZipUploadForm()
+        zipUploadForm.ShowDialog()
+
+    End Sub
+
+    ' NEW: Handler for Binary Upload button
+    Private Sub btnBinaryUpload_Click(sender As Object, e As EventArgs)
+        ' Open the Binary Upload form
+        Dim binaryUploadForm As New KC_LINK_LoaderV1.BinaryUploadForm()
+        binaryUploadForm.ShowDialog()
     End Sub
 
     Private Sub SaveBoardSettings()
@@ -990,7 +1041,7 @@ Public Class MainForm
 
         My.Settings.Save()
 
-        LogMessage($"[2025-06-20 04:26:24] Board settings saved by Chamil1983")
+        LogMessage($"[2025-08-11 03:04:58] Board settings saved by Chamil1983")
     End Sub
 
     Private Sub SaveRecentProject(path As String)
@@ -1059,134 +1110,164 @@ Public Class MainForm
             End If
         Catch ex As Exception
             ' Ignore errors pulsing progress bar
-            Debug.WriteLine($"[2025-06-20 04:26:24] Error pulsing progress bar: {ex.Message}")
+            Debug.WriteLine($"[2025-08-11 03:04:58] Error pulsing progress bar: {ex.Message}")
         End Try
     End Sub
 
     Private Sub workerThread_DoWork(sender As Object, e As DoWorkEventArgs) Handles workerThread.DoWork
         Dim worker As BackgroundWorker = DirectCast(sender, BackgroundWorker)
         Dim isUpload As Boolean = (e.Argument IsNot Nothing AndAlso e.Argument.ToString() = "upload")
-
-        ' Reset tracking variables
         compileOutputLines.Clear()
         compilationPhase = "Preparing"
         currentStep = 0
-        builderExitCode = -1  ' Initialize with error code
+        builderExitCode = -1
 
-        ' Get the board and port info from the UI thread and store it for use in the background thread
-        Dim selectedBoard As String = String.Empty
-        Dim selectedPort As String = String.Empty
-        Dim selectedPartition As String = String.Empty
-
-        ' Safely get values from UI controls using Invoke if needed
+        ' Gather info for background thread
+        Dim selectedBoard As String = ""
+        Dim selectedPort As String = ""
+        Dim selectedPartition As String = ""
         Me.Invoke(Sub()
                       selectedBoard = If(cmbBoardType.SelectedItem IsNot Nothing, cmbBoardType.SelectedItem.ToString(), "KC-Link PRO A8 (Default)")
                       selectedPartition = If(cmbPartitionOption.SelectedItem IsNot Nothing, cmbPartitionOption.SelectedItem.ToString(), "default")
-
                       If isUpload Then
                           selectedPort = If(cmbSerialPort.SelectedItem IsNot Nothing, cmbSerialPort.SelectedItem.ToString(), "")
                       End If
                   End Sub)
 
-        ' Create compilation/upload command
         Dim fqbn As String = boardConfigManager.GetFQBN(selectedBoard)
-
-        ' Apply partition scheme if not default
         If selectedPartition <> "default" AndAlso selectedPartition <> "custom" Then
             fqbn = boardConfigManager.ApplyPartitionScheme(fqbn, selectedPartition)
         ElseIf selectedPartition = "custom" Then
             fqbn = boardConfigManager.ApplyCustomPartitionFile(fqbn)
         End If
 
-        ' Add verbose output for better progress tracking
         Dim arguments As String
-
         If isUpload Then
             arguments = $"compile -v --upload --port {selectedPort} --fqbn {fqbn} ""{projectPath}"""
         Else
             arguments = $"compile -v --fqbn {fqbn} ""{projectPath}"""
         End If
 
-        ' Start Arduino CLI process
-        Using process As New Process()
-            process.StartInfo.FileName = My.Settings.ArduinoCliPath
-            process.StartInfo.Arguments = arguments
-            process.StartInfo.UseShellExecute = False
-            process.StartInfo.RedirectStandardOutput = True
-            process.StartInfo.RedirectStandardError = True
-            process.StartInfo.CreateNoWindow = True
+        Dim process As New Process()
+        process.StartInfo.FileName = My.Settings.ArduinoCliPath
+        process.StartInfo.Arguments = arguments
+        process.StartInfo.UseShellExecute = False
+        process.StartInfo.RedirectStandardOutput = True
+        process.StartInfo.RedirectStandardError = True
+        process.StartInfo.CreateNoWindow = True
 
-            ' Event handlers for output
-            AddHandler process.OutputDataReceived, AddressOf OnProcessOutputDataReceived
-            AddHandler process.ErrorDataReceived, AddressOf OnProcessErrorDataReceived
+        Dim processExited As Boolean = False
 
-            worker.ReportProgress(1, "Starting " & If(isUpload, "upload", "compilation") & "...")
-            worker.ReportProgress(1, $"Board: {selectedBoard}")
-            worker.ReportProgress(1, $"FQBN: {fqbn}")
-            If isUpload Then
-                worker.ReportProgress(1, $"Port: {selectedPort}")
+        ' Use local handlers that check a flag to avoid ReportProgress after completion
+        Dim safeReportProgress As Action(Of Integer, Object) =
+        Sub(p, d)
+            If Not worker.CancellationPending AndAlso Not processExited Then
+                Try
+                    worker.ReportProgress(p, d)
+                Catch ex As InvalidOperationException
+                    ' Ignore, worker may have completed
+                End Try
             End If
-            worker.ReportProgress(1, $"Partition: {selectedPartition}")
-            worker.ReportProgress(1, $"Command: arduino-cli {arguments}")
+        End Sub
 
-            Try
-                process.Start()
-                process.BeginOutputReadLine()
-                process.BeginErrorReadLine()
+        Dim outputHandler As DataReceivedEventHandler = Sub(s, ea)
+                                                            If Not String.IsNullOrEmpty(ea.Data) Then
+                                                                compilationOutput &= ea.Data & Environment.NewLine
+                                                                compileOutputLines.Add(ea.Data)
+                                                                lastOutputLine = ea.Data
+                                                                UpdateCompilationPhase(ea.Data)
+                                                                If ea.Data.Contains("Hard resetting") OrElse
+               ea.Data.Contains("Hash of data verified") OrElse
+               ea.Data.Contains("Leaving...") Then
+                                                                    compilationOutput &= "Upload completed successfully!" & Environment.NewLine
+                                                                End If
+                                                                If ea.Data.Contains("%") Then
+                                                                    Try
+                                                                        Dim match As Match = Regex.Match(ea.Data, "(\d+)%")
+                                                                        If match.Success Then
+                                                                            Dim percentage As Integer = Integer.Parse(match.Groups(1).Value)
+                                                                            If percentage > 0 AndAlso (DateTime.Now - lastProgressUpdate).TotalMilliseconds > 250 Then
+                                                                                safeReportProgress(percentage, Nothing)
+                                                                                lastProgressUpdate = DateTime.Now
+                                                                            End If
+                                                                        End If
+                                                                    Catch
+                                                                    End Try
+                                                                End If
+                                                                safeReportProgress(0, ea.Data)
+                                                            End If
+                                                        End Sub
 
-                Dim startTime As DateTime = DateTime.Now
-                Dim lastProgressPercentage As Integer = 0
+        Dim errorHandler As DataReceivedEventHandler = Sub(s, ea)
+                                                           If Not String.IsNullOrEmpty(ea.Data) Then
+                                                               compilationOutput &= "ERROR: " & ea.Data & Environment.NewLine
+                                                               lastOutputLine = "ERROR: " & ea.Data
+                                                               UpdateCompilationPhase(ea.Data)
+                                                               safeReportProgress(0, "ERROR: " & ea.Data)
+                                                           End If
+                                                       End Sub
 
-                ' Wait for process to exit or cancellation
-                While Not process.HasExited
-                    If worker.CancellationPending Then
-                        process.Kill()
-                        e.Cancel = True
-                        worker.ReportProgress(0, "Process cancelled by user")
-                        Return
-                    End If
+        Try
+            AddHandler process.OutputDataReceived, outputHandler
+            AddHandler process.ErrorDataReceived, errorHandler
+            process.Start()
+            process.BeginOutputReadLine()
+            process.BeginErrorReadLine()
 
-                    ' Update progress every 500ms even if no output
-                    If (DateTime.Now - lastProgressUpdate).TotalMilliseconds > 500 Then
-                        Dim estimatedProgress As Integer = EstimateProgressFromOutput()
-                        If estimatedProgress > lastProgressPercentage Then
-                            worker.ReportProgress(estimatedProgress, $"Progress: {compilationPhase} - {estimatedProgress}%")
-                            lastProgressPercentage = estimatedProgress
-                        End If
-                        lastProgressUpdate = DateTime.Now
-                    End If
+            Dim startTime As DateTime = DateTime.Now
+            Dim lastProgressPercentage As Integer = 0
 
-                    Threading.Thread.Sleep(100)
-                End While
-
-                Dim endTime As DateTime = DateTime.Now
-                Dim duration As TimeSpan = endTime - startTime
-
-                ' Process completed
-                If process.ExitCode = 0 Then
-                    worker.ReportProgress(100, If(isUpload, "Upload completed successfully!", "Compilation completed successfully!"))
-                    worker.ReportProgress(100, $"Completed in {duration.TotalSeconds:F1} seconds")
-
-                    ' Update statistics
-                    hardwareStats.AddCompilation(Path.GetFileName(projectPath), process.ExitCode = 0, duration)
-
-                    ' Parse output for binary size information
-                    If Not isUpload Then
-                        ParseCompilationOutput(compilationOutput)
-                    End If
-                Else
-                    worker.ReportProgress(0, If(isUpload, "Upload failed with errors", "Compilation failed with errors"))
-                    worker.ReportProgress(0, $"Process exited with code: {process.ExitCode}")
-
-                    ' Update statistics for failed compilation
-                    hardwareStats.AddCompilation(Path.GetFileName(projectPath), False, duration)
+            While Not process.HasExited
+                If worker.CancellationPending Then
+                    process.Kill()
+                    e.Cancel = True
+                    Exit While
                 End If
-            Catch ex As Exception
-                worker.ReportProgress(0, "Error: " & ex.Message)
-                builderExitCode = -1  ' Set error code on exception
-            End Try
-        End Using
+
+                If (DateTime.Now - lastProgressUpdate).TotalMilliseconds > 500 Then
+                    Dim estimatedProgress As Integer = EstimateProgressFromOutput()
+                    If estimatedProgress > lastProgressPercentage Then
+                        safeReportProgress(estimatedProgress, $"Progress: {compilationPhase} - {estimatedProgress}%")
+                        lastProgressPercentage = estimatedProgress
+                    End If
+                    lastProgressUpdate = DateTime.Now
+                End If
+
+                Thread.Sleep(100)
+            End While
+
+            processExited = True ' Mark as exited BEFORE removing handlers
+
+            RemoveHandler process.OutputDataReceived, outputHandler
+            RemoveHandler process.ErrorDataReceived, errorHandler
+
+            Dim endTime As DateTime = DateTime.Now
+            Dim duration As TimeSpan = endTime - startTime
+            builderExitCode = process.ExitCode
+
+            If process.ExitCode = 0 Then
+                safeReportProgress(100, If(isUpload, "Upload completed successfully!", "Compilation completed successfully!"))
+                safeReportProgress(100, $"Completed in {duration.TotalSeconds:F1} seconds")
+                hardwareStats.AddCompilation(Path.GetFileName(projectPath), process.ExitCode = 0, duration)
+                If Not isUpload Then ParseCompilationOutput(compilationOutput)
+            Else
+                safeReportProgress(0, If(isUpload, "Upload failed with errors", "Compilation failed with errors"))
+                safeReportProgress(0, $"Process exited with code: {process.ExitCode}")
+                hardwareStats.AddCompilation(Path.GetFileName(projectPath), False, duration)
+            End If
+        Catch ex As Exception
+            processExited = True
+            RemoveHandler process.OutputDataReceived, outputHandler
+            RemoveHandler process.ErrorDataReceived, errorHandler
+            safeReportProgress(0, "Error: " & ex.Message)
+            builderExitCode = -1
+        Finally
+            processExited = True
+            RemoveHandler process.OutputDataReceived, outputHandler
+            RemoveHandler process.ErrorDataReceived, errorHandler
+        End Try
     End Sub
+
 
     Private Sub OnProcessOutputDataReceived(sender As Object, e As DataReceivedEventArgs)
         If Not String.IsNullOrEmpty(e.Data) Then
@@ -1195,6 +1276,14 @@ Public Class MainForm
 
             ' Add to line collection for progress tracking
             compileOutputLines.Add(e.Data)
+
+            ' Add success indicators for upload operations
+            If e.Data.Contains("Hard resetting") OrElse
+               e.Data.Contains("Hash of data verified") OrElse
+               e.Data.Contains("Leaving...") Then
+                ' These messages indicate successful upload
+                compilationOutput &= "Upload completed successfully!" & Environment.NewLine
+            End If
 
             ' Report line to UI thread
             workerThread.ReportProgress(0, e.Data)
@@ -1319,7 +1408,7 @@ Public Class MainForm
                 End If
             Catch ex As Exception
                 ' Ignore errors updating progress UI
-                Debug.WriteLine($"[2025-06-20 04:26:24] Error updating progress: {ex.Message}")
+                Debug.WriteLine($"[2025-08-11 03:09:49] Error updating progress: {ex.Message}")
             End Try
         End If
 
@@ -1335,6 +1424,33 @@ Public Class MainForm
             UpdateStatusBar(statusText)
         End If
     End Sub
+
+    Private Function IsOperationSuccessful() As Boolean
+        ' First check the process exit code - most reliable indicator
+        If builderExitCode = 0 Then
+            Return True
+        End If
+
+        ' Check for specific success patterns in output
+        If compilationOutput.Contains("Compilation completed successfully") OrElse
+           compilationOutput.Contains("Upload completed successfully") OrElse
+           compilationOutput.Contains("Hard resetting") OrElse
+           compilationOutput.Contains("Hash of data verified") OrElse
+           compilationOutput.Contains("Leaving...") Then
+            Return True
+        End If
+
+        ' Check for failure indicators
+        If compilationOutput.Contains("failed with errors") OrElse
+           compilationOutput.Contains("error:") OrElse
+           compilationOutput.Contains("Error:") OrElse
+           compilationOutput.Contains("failed to") Then
+            Return False
+        End If
+
+        ' If no clear indicators, use exit code
+        Return builderExitCode = 0
+    End Function
 
     Private Sub workerThread_RunWorkerCompleted(sender As Object, e As RunWorkerCompletedEventArgs) Handles workerThread.RunWorkerCompleted
         ' Stop the timer
@@ -1360,27 +1476,45 @@ Public Class MainForm
             lblStatusIndicator.ForeColor = Color.Red
             UpdateStatusBar("Error: " & e.Error.Message)
         Else
-            ' Operation completed - FIX: Properly detect success from return code and output
-            Dim success = (builderExitCode = 0) OrElse
-                     Not compilationOutput.Contains("error:") OrElse
-                     Not compilationOutput.Contains("failed with errors") OrElse
-                     compilationOutput.Contains("Compilation completed successfully") OrElse
-                     compilationOutput.Contains("Upload completed successfully")
+            ' Use improved success detection
+            Dim success = IsOperationSuccessful()
 
             If success Then
                 lblStatusIndicator.Text = "Success"
                 lblStatusIndicator.ForeColor = Color.Green
                 UpdateStatusBar("Operation completed successfully")
-                LogMessage($"[2025-06-20 22:33:14] Compilation/Upload completed successfully by Chamil1983")
+                LogMessage($"[2025-08-11 03:09:49] Compilation/Upload completed successfully by Chamil1983")
+
+                ' Make sure progress bars are at 100% on success
+                If buildProgressBar.InvokeRequired Then
+                    buildProgressBar.Invoke(Sub() buildProgressBar.Value = 100)
+                Else
+                    buildProgressBar.Value = 100
+                End If
+
+                ' Update status strip progress bar safely
+                If toolStripProgressBar.GetCurrentParent() IsNot Nothing Then
+                    If toolStripProgressBar.GetCurrentParent().InvokeRequired Then
+                        toolStripProgressBar.GetCurrentParent().Invoke(Sub() toolStripProgressBar.Value = 100)
+                    Else
+                        toolStripProgressBar.Value = 100
+                    End If
+                End If
+
+                ' Update statistics before triggering animation
+                UpdateStatisticsUI()
+
+                ' Flash progress bars to indicate success
+                FlashProgressBarsOnSuccess()
             Else
                 lblStatusIndicator.Text = "Failed"
                 lblStatusIndicator.ForeColor = Color.Red
                 UpdateStatusBar("Operation failed")
-                LogMessage($"[2025-06-20 22:33:14] Compilation/Upload failed by Chamil1983")
-            End If
+                LogMessage($"[2025-08-11 03:09:49] Compilation/Upload failed by Chamil1983")
 
-            ' Update statistics UI
-            UpdateStatisticsUI()
+                ' Update statistics UI without animation
+                UpdateStatisticsUI()
+            End If
         End If
     End Sub
 
@@ -1407,7 +1541,7 @@ Public Class MainForm
                 hardwareStats.UpdateSketchSize(sketchSize, sketchPercentage)
 
                 ' Log
-                LogMessage($"[2025-06-20 04:26:24] Compiled sketch size: {sketchSize} bytes ({sketchPercentage}%)")
+                LogMessage($"[2025-08-11 03:09:49] Compiled sketch size: {sketchSize} bytes ({sketchPercentage}%)")
             End If
 
             ' Extract RAM usage if available
@@ -1420,10 +1554,10 @@ Public Class MainForm
                 hardwareStats.UpdateRAMUsage(ramSize, ramPercentage)
 
                 ' Log
-                LogMessage($"[2025-06-20 20:59:26] RAM usage: {ramSize} bytes ({ramPercentage}%)")
+                LogMessage($"[2025-08-11 03:09:49] RAM usage: {ramSize} bytes ({ramPercentage}%)")
             End If
         Catch ex As Exception
-            LogMessage($"[2025-06-20 20:59:26] Error parsing compilation statistics: {ex.Message}")
+            LogMessage($"[2025-08-11 03:09:49] Error parsing compilation statistics: {ex.Message}")
         End Try
     End Sub
 
@@ -1436,85 +1570,116 @@ Public Class MainForm
     End Sub
 
     Private Sub UpdateStatisticsUI()
+        ' Update statistics panel with latest information
         lblFlashUsage.Text = $"Flash: {hardwareStats.SketchSize} bytes ({hardwareStats.SketchSizePercentage}%)"
         lblRAMUsage.Text = $"RAM: {hardwareStats.RAMSize} bytes ({hardwareStats.RAMPercentage}%)"
 
-        ' Update progress bars for flash and RAM usage
-        flashUsageBar.Value = Math.Min(hardwareStats.SketchSizePercentage, 100)
-        ramUsageBar.Value = Math.Min(hardwareStats.RAMPercentage, 100)
+        ' Update the compile time label
+        lblCompileTime.Text = $"Last compile: {hardwareStats.LastCompileDuration.TotalSeconds:F1} seconds"
 
-        ' Color logic: Blue (good), Orange (warn), Red (critical)
-        If hardwareStats.SketchSizePercentage >= 90 Then
-            flashUsageBar.BarColor = Color.Red
-        ElseIf hardwareStats.SketchSizePercentage >= 75 Then
-            flashUsageBar.BarColor = Color.Orange
+        ' Update success rate
+        Dim successRate As Integer = hardwareStats.CompilationSuccessRate
+        lblSuccessRate.Text = $"Success rate: {successRate}%"
+
+        ' Update progress bars for flash and RAM usage without invalidating yet
+        Dim flashPercentage As Integer = Math.Min(hardwareStats.SketchSizePercentage, 100)
+        Dim ramPercentage As Integer = Math.Min(hardwareStats.RAMPercentage, 100)
+
+        ' Set colors (will not cause redraw yet)
+        ' Color for Flash usage bar
+        If flashPercentage >= 90 Then
+            flashUsageBar.BarColor = Color.DarkRed
+        ElseIf flashPercentage >= 75 Then
+            flashUsageBar.BarColor = Color.DarkOrange
         Else
             flashUsageBar.BarColor = Color.RoyalBlue
         End If
 
-        If hardwareStats.RAMPercentage >= 90 Then
-            ramUsageBar.BarColor = Color.Red
-        ElseIf hardwareStats.RAMPercentage >= 75 Then
-            ramUsageBar.BarColor = Color.Orange
+        ' Color for RAM usage bar
+        If ramPercentage >= 90 Then
+            ramUsageBar.BarColor = Color.DarkRed
+        ElseIf ramPercentage >= 75 Then
+            ramUsageBar.BarColor = Color.DarkOrange
         Else
             ramUsageBar.BarColor = Color.MediumPurple
         End If
 
-        flashUsageBar.Invalidate()
-        ramUsageBar.Invalidate()
-    End Sub
-
-    Private Sub ProgressBar_Paint(sender As Object, e As PaintEventArgs)
-        Dim progressBar As ProgressBar = DirectCast(sender, ProgressBar)
-        Dim rect As Rectangle = progressBar.ClientRectangle
-        Dim g As Graphics = e.Graphics
-
-        ' Calculate the filled portion of the progress bar
-        Dim fillWidth As Integer = CInt((rect.Width * progressBar.Value) / progressBar.Maximum)
-        Dim fillRect As New Rectangle(rect.X, rect.Y, fillWidth, rect.Height)
-
-        ' Fill with gradient based on percentage
-        Dim percentage As Integer = progressBar.Value
-        Dim fillColor As Color
-
-        If percentage >= 90 Then
-            ' Red for critical
-            fillColor = Color.FromArgb(255, 72, 71)
-        ElseIf percentage >= 75 Then
-            ' Orange/Amber for warning
-            fillColor = Color.FromArgb(255, 165, 0)
-        Else
-            ' Blue for good
-            fillColor = Color.FromArgb(0, 122, 204)
+        ' Only update values if they've changed to minimize repaints
+        If flashUsageBar.Value <> flashPercentage Then
+            flashUsageBar.Value = flashPercentage
         End If
 
-        ' Create gradient brush for better appearance
-        Using fillBrush As New LinearGradientBrush(
-        fillRect,
-        Color.FromArgb(fillColor.R, fillColor.G, fillColor.B, 230), ' Slightly transparent version
-        fillColor,
-        LinearGradientMode.Vertical)
+        If ramUsageBar.Value <> ramPercentage Then
+            ramUsageBar.Value = ramPercentage
+        End If
 
-            ' Fill the progress portion
-            If fillWidth > 0 Then
-                g.FillRectangle(fillBrush, fillRect)
-            End If
-        End Using
+        LogMessage($"[2025-08-11 03:09:49] Statistics updated by Chamil1983")
+    End Sub
 
-        ' Draw border around the progress bar for better definition
-        Using borderPen As New Pen(Color.DarkGray, 1)
-            g.DrawRectangle(borderPen, 0, 0, rect.Width - 1, rect.Height - 1)
-        End Using
+    ' Method to flash progress bars on successful completion
+    Private Sub FlashProgressBarsOnSuccess()
+        ' Stop any existing flashing
+        StopProgressBarFlashing()
 
-        ' Draw percentage text centered in the progress bar
-        Dim textBrush As Brush = Brushes.Black
-        Dim text As String = $"{percentage}%"
-        Dim textSize As SizeF = g.MeasureString(text, progressBar.Font)
-        Dim textPos As New PointF(
-        (rect.Width - textSize.Width) / 2,
-        (rect.Height - textSize.Height) / 2)
+        ' Store original colors
+        Dim flashOriginalColor As Color = flashUsageBar.BarColor
+        Dim ramOriginalColor As Color = ramUsageBar.BarColor
 
-        g.DrawString(text, progressBar.Font, textBrush, textPos)
+        ' Start flash sequence
+        isFlashingProgressBar = True
+        progressFlashTimer.Tag = New Object() {
+            flashOriginalColor,  ' Store original flash color at index 0 
+            ramOriginalColor,    ' Store original RAM color at index 1
+            0                    ' Flash counter at index 2
+        }
+
+        progressFlashTimer.Start()
+
+        LogMessage($"[2025-08-11 03:09:49] Success animation started by Chamil1983")
+    End Sub
+
+    Private Sub StopProgressBarFlashing()
+        ' Stop the timer
+        progressFlashTimer.Stop()
+        isFlashingProgressBar = False
+
+        ' Restore original colors if we have them
+        If progressFlashTimer.Tag IsNot Nothing Then
+            Dim originalColors As Object() = DirectCast(progressFlashTimer.Tag, Object())
+
+            flashUsageBar.BarColor = DirectCast(originalColors(0), Color)
+            ramUsageBar.BarColor = DirectCast(originalColors(1), Color)
+        End If
+
+        LogMessage($"[2025-08-11 03:09:49] Animation stopped by Chamil1983")
+    End Sub
+
+    Private Sub ProgressFlashTimer_Tick(sender As Object, e As EventArgs)
+        ' Get stored data
+        Dim data As Object() = DirectCast(progressFlashTimer.Tag, Object())
+        Dim flashOriginalColor As Color = DirectCast(data(0), Color)
+        Dim ramOriginalColor As Color = DirectCast(data(1), Color)
+        Dim counter As Integer = CInt(data(2))
+
+        ' Toggle colors based on counter
+        If counter Mod 2 = 0 Then
+            ' Flash green on even counts
+            flashUsageBar.BarColor = Color.Green
+            ramUsageBar.BarColor = Color.Green
+        Else
+            ' Restore original colors on odd counts
+            flashUsageBar.BarColor = flashOriginalColor
+            ramUsageBar.BarColor = ramOriginalColor
+        End If
+
+        ' Increment counter
+        counter += 1
+        data(2) = counter
+
+        ' Stop after 6 flashes (3 cycles)
+        If counter >= 6 Then
+            StopProgressBarFlashing()
+        End If
     End Sub
 
     Private Sub UpdateProjectInfo()
@@ -1601,9 +1766,9 @@ Public Class MainForm
 
         ' Load Arduino CLI path
         If File.Exists(My.Settings.ArduinoCliPath) Then
-            LogMessage($"[2025-06-20 20:59:26] Using Arduino CLI from: {My.Settings.ArduinoCliPath}")
+            LogMessage($"[2025-08-11 03:09:49] Using Arduino CLI from: {My.Settings.ArduinoCliPath}")
         Else
-            LogMessage($"[2025-06-20 20:59:26] Arduino CLI not found at configured path: {My.Settings.ArduinoCliPath}")
+            LogMessage($"[2025-08-11 03:09:49] Arduino CLI not found at configured path: {My.Settings.ArduinoCliPath}")
 
             ' Try to find arduino-cli in common locations
             Dim possiblePaths As String() = {
@@ -1616,7 +1781,7 @@ Public Class MainForm
                 If File.Exists(path) Then
                     My.Settings.ArduinoCliPath = path
                     My.Settings.Save()
-                    LogMessage($"[2025-06-20 20:59:26] Found Arduino CLI at: {path}")
+                    LogMessage($"[2025-08-11 03:09:49] Found Arduino CLI at: {path}")
                     Exit For
                 End If
             Next
@@ -1625,7 +1790,7 @@ Public Class MainForm
         ' Load boards.txt path
         If Not String.IsNullOrEmpty(My.Settings.BoardsFilePath) AndAlso File.Exists(My.Settings.BoardsFilePath) Then
             boardConfigManager.BoardsFilePath = My.Settings.BoardsFilePath
-            LogMessage($"[2025-06-20 20:59:26] Using boards.txt from: {My.Settings.BoardsFilePath}")
+            LogMessage($"[2025-08-11 03:09:49] Using boards.txt from: {My.Settings.BoardsFilePath}")
         End If
 
         ' Set last used board if available
@@ -1667,7 +1832,7 @@ Public Class MainForm
                     writer.WriteLine(message)
                 End Using
             Catch ex As Exception
-                Debug.WriteLine($"[2025-06-20 20:59:26] Logging error: {ex.Message}")
+                Debug.WriteLine($"[2025-08-11 03:09:49] Logging error: {ex.Message}")
             End Try
         End If
 
@@ -1685,7 +1850,7 @@ Public Class MainForm
         SaveBoardSettings()
 
         ' Log application exit
-        LogMessage($"[2025-06-20 20:59:26] Application exited by Chamil1983")
+        LogMessage($"[2025-08-11 03:09:49] Application exited by Chamil1983")
     End Sub
 
     ' Menu event handlers
@@ -1711,7 +1876,7 @@ Public Class MainForm
                 boardConfigManager.BoardsFilePath = openFileDialog.FileName
 
                 ' Log the change
-                LogMessage($"[2025-06-20 20:59:26] boards.txt path updated to {openFileDialog.FileName} by Chamil1983")
+                LogMessage($"[2025-08-11 03:09:49] boards.txt path updated to {openFileDialog.FileName} by Chamil1983")
 
                 ' Ask if user wants to reload configurations
                 If MessageBox.Show("Would you like to reload board configurations from the selected file?",
@@ -1743,7 +1908,7 @@ Public Class MainForm
         Dim aboutMessage As String = "KC-Link Loader v1.1" + Environment.NewLine + Environment.NewLine +
                                  "A utility for compiling and uploading code to ESP32 boards." + Environment.NewLine + Environment.NewLine +
                                  "Copyright © 2025 Chamil1983" + Environment.NewLine +
-                                 "Last updated: 2025-06-20"
+                                 "Last updated: 2025-08-11"
 
         MessageBox.Show(aboutMessage, "About KC-Link Loader", MessageBoxButtons.OK, MessageBoxIcon.Information)
     End Sub
@@ -1788,7 +1953,7 @@ Public Class MainForm
             projectPath = path
             txtProjectPath.Text = projectPath
             UpdateProjectInfo()
-            LogMessage($"[2025-06-20 20:59:26] Opened recent project: {path}")
+            LogMessage($"[2025-08-11 03:09:49] Opened recent project: {path}")
         Else
             MessageBox.Show("Project directory no longer exists.", "Project Not Found", MessageBoxButtons.OK, MessageBoxIcon.Warning)
 
@@ -1806,7 +1971,202 @@ Public Class MainForm
             My.Settings.RecentProjects.Clear()
             My.Settings.Save()
             UpdateRecentProjectsMenu()
-            LogMessage($"[2025-06-20 20:59:26] Recent projects list cleared by Chamil1983")
+            LogMessage($"[2025-08-11 03:09:49] Recent projects list cleared by Chamil1983")
+        End If
+    End Sub
+
+    ' NEW: Event handlers for menu items
+    Private Sub mnuZipUpload_Click(sender As Object, e As EventArgs)
+        btnZipUpload_Click(sender, e)
+    End Sub
+
+    Private Sub mnuBinaryUpload_Click(sender As Object, e As EventArgs)
+        btnBinaryUpload_Click(sender, e)
+    End Sub
+End Class
+
+' Custom progress bar with color control
+Public Class ColoredProgressBar
+    Inherits Control
+
+    Private _value As Integer = 0
+    Private _maximum As Integer = 100
+    Private _minimum As Integer = 0
+    Private _barColor As Color = Color.RoyalBlue
+    Private _showText As Boolean = True
+
+    Public Sub New()
+        MyBase.New()
+        ' Enable double-buffering and other optimizations
+        Me.SetStyle(ControlStyles.UserPaint Or
+                   ControlStyles.AllPaintingInWmPaint Or
+                   ControlStyles.OptimizedDoubleBuffer Or
+                   ControlStyles.ResizeRedraw Or
+                   ControlStyles.SupportsTransparentBackColor, True)
+
+        Me.BackColor = SystemColors.Control
+        Me.ForeColor = Color.Black
+        Me.Height = 20
+    End Sub
+
+    <ComponentModel.Category("Appearance")>
+    <ComponentModel.DefaultValue(0)>
+    Public Property Value As Integer
+        Get
+            Return _value
+        End Get
+        Set(value As Integer)
+            ' Constrain to min/max
+            If value < _minimum Then
+                value = _minimum
+            ElseIf value > _maximum Then
+                value = _maximum
+            End If
+
+            ' Only invalidate if changed
+            If _value <> value Then
+                _value = value
+                Invalidate(False) ' False = only invalidate client area
+            End If
+        End Set
+    End Property
+
+    <ComponentModel.Category("Appearance")>
+    <ComponentModel.DefaultValue(100)>
+    Public Property Maximum As Integer
+        Get
+            Return _maximum
+        End Get
+        Set(value As Integer)
+            If value < _minimum Then value = _minimum
+
+            If _maximum <> value Then
+                _maximum = value
+                If _value > _maximum Then _value = _maximum
+                Invalidate(False)
+            End If
+        End Set
+    End Property
+
+    <ComponentModel.Category("Appearance")>
+    <ComponentModel.DefaultValue(0)>
+    Public Property Minimum As Integer
+        Get
+            Return _minimum
+        End Get
+        Set(value As Integer)
+            If value > _maximum Then value = _maximum
+
+            If _minimum <> value Then
+                _minimum = value
+                If _value < _minimum Then _value = _minimum
+                Invalidate(False)
+            End If
+        End Set
+    End Property
+
+    <ComponentModel.Category("Appearance")>
+    Public Property BarColor As Color
+        Get
+            Return _barColor
+        End Get
+        Set(value As Color)
+            If _barColor <> value Then
+                _barColor = value
+                Invalidate(False)
+            End If
+        End Set
+    End Property
+
+    <ComponentModel.Category("Appearance")>
+    <ComponentModel.DefaultValue(True)>
+    Public Property ShowPercentText As Boolean
+        Get
+            Return _showText
+        End Get
+        Set(value As Boolean)
+            If _showText <> value Then
+                _showText = value
+                Invalidate(False)
+            End If
+        End Set
+    End Property
+
+    Protected Overrides Sub OnPaint(e As PaintEventArgs)
+        MyBase.OnPaint(e)
+
+        Dim g As Graphics = e.Graphics
+        Dim rect As Rectangle = ClientRectangle
+
+        ' Anti-aliasing for smoother appearance
+        g.SmoothingMode = SmoothingMode.AntiAlias
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic
+
+        ' Draw background
+        Using bgBrush As New SolidBrush(Me.BackColor)
+            g.FillRectangle(bgBrush, rect)
+        End Using
+
+        ' Calculate progress width
+        Dim range As Integer = _maximum - _minimum
+        If range <= 0 Then range = 1 ' Prevent division by zero
+
+        Dim percentage As Double = CDbl(_value - _minimum) / range
+        Dim progressWidth As Integer = CInt(Math.Floor(rect.Width * percentage))
+
+        ' Draw progress bar only if there's something to draw
+        If progressWidth > 0 Then
+            ' Create rectangle for the progress part
+            Dim progressRect As New Rectangle(rect.X, rect.Y, progressWidth, rect.Height)
+
+            ' Draw gradient fill for progress bar
+            Using barBrush As New LinearGradientBrush(
+                progressRect,
+                Color.FromArgb(_barColor.R, _barColor.G, _barColor.B, 230),  ' Slightly transparent version
+                _barColor,
+                LinearGradientMode.Vertical)
+
+                g.FillRectangle(barBrush, progressRect)
+            End Using
+
+            ' Add light bevel effect for 3D look
+            Using lightPen As New Pen(Color.FromArgb(60, 255, 255, 255), 1)
+                g.DrawLine(lightPen, progressRect.X, progressRect.Y, progressRect.Right, progressRect.Y)
+                g.DrawLine(lightPen, progressRect.X, progressRect.Y, progressRect.X, progressRect.Bottom)
+            End Using
+
+            Using shadowPen As New Pen(Color.FromArgb(40, 0, 0, 0), 1)
+                g.DrawLine(shadowPen, progressRect.X, progressRect.Bottom - 1, progressRect.Right - 1, progressRect.Bottom - 1)
+                g.DrawLine(shadowPen, progressRect.Right - 1, progressRect.Y, progressRect.Right - 1, progressRect.Bottom - 1)
+            End Using
+        End If
+
+        ' Draw border
+        Using borderPen As New Pen(Color.Gray, 1)
+            g.DrawRectangle(borderPen, 0, 0, rect.Width - 1, rect.Height - 1)
+        End Using
+
+        ' Draw text if enabled
+        If _showText Then
+            Dim percentValue As Integer = CInt(percentage * 100)
+            Dim text As String = $"{percentValue}%"
+            Dim textSize As SizeF = g.MeasureString(text, Me.Font)
+
+            Dim textRect As New RectangleF(
+                (rect.Width - textSize.Width) / 2,
+                (rect.Height - textSize.Height) / 2,
+                textSize.Width,
+                textSize.Height)
+
+            ' Use a shadow for better readability
+            Using shadowBrush As New SolidBrush(Color.FromArgb(80, 0, 0, 0))
+                g.DrawString(text, Me.Font, shadowBrush, textRect.X + 1, textRect.Y + 1)
+            End Using
+
+            ' Draw actual text
+            Using textBrush As New SolidBrush(Me.ForeColor)
+                g.DrawString(text, Me.Font, textBrush, textRect.X, textRect.Y)
+            End Using
         End If
     End Sub
 End Class
