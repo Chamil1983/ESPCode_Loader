@@ -9,6 +9,8 @@ Public Class BoardManager
     ' Private fields
     Private boardConfigurations As Dictionary(Of String, String) = New Dictionary(Of String, String)()
     Private boardParameters As Dictionary(Of String, Dictionary(Of String, String)) = New Dictionary(Of String, Dictionary(Of String, String))()
+    Private boardMenuOptions As Dictionary(Of String, Dictionary(Of String, Dictionary(Of String, String))) = New Dictionary(Of String, Dictionary(Of String, Dictionary(Of String, String)))()
+    Private boardIdMap As Dictionary(Of String, String) = New Dictionary(Of String, String)() ' Map board names to board IDs
     Private customPartitionFile As String = String.Empty
 
     ' Properties
@@ -47,6 +49,8 @@ Public Class BoardManager
         ' Clear existing configurations
         boardConfigurations.Clear()
         boardParameters.Clear()
+        boardMenuOptions.Clear()
+        boardIdMap.Clear()
 
         ' Add default configurations
         AddDefaultConfigurations()
@@ -56,131 +60,234 @@ Public Class BoardManager
             Try
                 Dim lines As String() = File.ReadAllLines(BoardsFilePath)
 
-                Debug.WriteLine($"[2025-06-20 02:33:09] Loading boards from: {BoardsFilePath}")
+                Debug.WriteLine($"[2025-08-12 13:03:54] Loading boards from: {BoardsFilePath}")
                 ParseBoardsFile(lines)
 
                 ' Log loaded configurations
-                Debug.WriteLine($"[2025-06-20 02:33:09] Loaded {boardConfigurations.Count} board configurations")
+                Debug.WriteLine($"[2025-08-12 13:03:54] Loaded {boardConfigurations.Count} board configurations")
             Catch ex As Exception
                 MessageBox.Show($"Error loading board configurations: {ex.Message}",
                               "Configuration Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                Debug.WriteLine($"[2025-06-20 02:33:09] Error loading boards: {ex.Message}")
+                Debug.WriteLine($"[2025-08-12 13:03:54] Error loading boards: {ex.Message}")
             End Try
         Else
-            Debug.WriteLine($"[2025-06-20 02:33:09] Boards file not found: {BoardsFilePath}")
+            Debug.WriteLine($"[2025-08-12 13:03:54] Boards file not found: {BoardsFilePath}")
         End If
     End Sub
 
     ' Parse boards.txt file to extract all board configurations
     Private Sub ParseBoardsFile(lines As String())
-        ' First pass: find all board IDs
-        Dim boardIDs As New Dictionary(Of String, String)()
+        ' First pass: extract global menu options
+        Dim globalMenus As New Dictionary(Of String, String)()
 
         For Each line In lines
-            ' Look for board name entries (e.g., "esp32.name=ESP32 Dev Module")
-            If line.Contains(".name=") Then
+            If line.Trim().StartsWith("menu.") AndAlso line.Contains("=") Then
                 Try
-                    Dim parts = line.Split(New Char() {"."c}, 2)
-                    If parts.Length >= 2 Then
-                        Dim boardId = parts(0)
-                        parts = parts(1).Split(New Char() {"="c}, 2)
-                        If parts.Length >= 2 Then
-                            Dim boardName = parts(1).Trim()
-                            boardIDs.Add(boardId, boardName)
-
-                            ' Initialize parameter dictionary for this board
-                            boardParameters.Add(boardName, New Dictionary(Of String, String)())
-                        End If
+                    Dim parts = line.Split(New Char() {"="c}, 2)
+                    If parts.Length = 2 Then
+                        Dim menuKey = parts(0).Trim()
+                        Dim menuValue = parts(1).Trim()
+                        globalMenus(menuKey) = menuValue
+                        Debug.WriteLine($"[2025-08-12 13:03:54] Found global menu: {menuKey}={menuValue}")
                     End If
                 Catch ex As Exception
-                    Debug.WriteLine($"[2025-06-20 02:33:09] Error parsing board name: {line}, {ex.Message}")
+                    Debug.WriteLine($"[2025-08-12 13:03:54] Error parsing global menu: {line}, {ex.Message}")
                 End Try
             End If
         Next
 
-        ' Second pass: extract all parameters for each board
-        For Each boardId In boardIDs.Keys
-            Dim boardName = boardIDs(boardId)
-            Dim parameters = boardParameters(boardName)
+        ' Second pass: identify all boards
+        For Each line In lines
+            If line.Contains(".name=") Then
+                Try
+                    Dim parts = line.Split(New Char() {"."c}, 2)
+                    If parts.Length >= 2 Then
+                        Dim boardId = parts(0).Trim()
+                        parts = parts(1).Split(New Char() {"="c}, 2)
+                        If parts.Length >= 2 Then
+                            Dim boardName = parts(1).Trim()
 
-            ' Default parameters
-            parameters("menu.PartitionScheme") = "Partition Scheme"
-            parameters("menu.CPUFreq") = "CPU Frequency"
-            parameters("menu.FlashMode") = "Flash Mode"
-            parameters("menu.FlashFreq") = "Flash Frequency"
-            parameters("menu.UploadSpeed") = "Upload Speed"
-            parameters("menu.DebugLevel") = "Debug Level"
+                            ' Add board ID to name mapping
+                            boardIdMap(boardName) = boardId
+
+                            ' Initialize parameter dictionary for this board
+                            boardParameters(boardName) = New Dictionary(Of String, String)()
+
+                            ' Initialize menu options dictionary for this board
+                            boardMenuOptions(boardName) = New Dictionary(Of String, Dictionary(Of String, String))()
+
+                            Debug.WriteLine($"[2025-08-12 13:03:54] Found board: {boardId}={boardName}")
+                        End If
+                    End If
+                Catch ex As Exception
+                    Debug.WriteLine($"[2025-08-12 13:03:54] Error parsing board name: {line}, {ex.Message}")
+                End Try
+            End If
+        Next
+
+        ' Third pass: extract all parameters and menu options for each board
+        For Each boardName In boardIdMap.Keys
+            Dim boardId = boardIdMap(boardName)
+            Dim parameters = boardParameters(boardName)
+            Dim menuOptions = boardMenuOptions(boardName)
+
+            ' Copy global menu titles to this board
+            For Each menuEntry In globalMenus
+                Dim menuKey = menuEntry.Key
+                Dim menuTitle = menuEntry.Value
+
+                ' Extract menu type (e.g., menu.FlashFreq -> FlashFreq)
+                If menuKey.StartsWith("menu.") AndAlso menuKey.IndexOf(".", 5) = -1 Then
+                    Dim menuType = menuKey.Substring(5)
+                    parameters(menuKey) = menuTitle
+                    menuOptions(menuType) = New Dictionary(Of String, String)()
+                End If
+            Next
 
             ' Extract all parameters for this board
             For Each line In lines
                 If line.StartsWith(boardId & ".") Then
                     Try
-                        ' Skip the board name entry already processed
-                        If line.Contains(".name=") Then Continue For
+                        Dim lineWithoutBoardId = line.Substring(boardId.Length + 1)
+                        Dim equalsPos = lineWithoutBoardId.IndexOf("=")
 
-                        Dim lineParts = line.Substring(boardId.Length + 1).Split(New Char() {"="c}, 2)
-                        If lineParts.Length >= 2 Then
-                            Dim key = lineParts(0)
-                            Dim value = lineParts(1).Trim()
+                        If equalsPos > 0 Then
+                            Dim key = lineWithoutBoardId.Substring(0, equalsPos).Trim()
+                            Dim value = lineWithoutBoardId.Substring(equalsPos + 1).Trim()
 
-                            ' Store the parameter
+                            ' Check if this is a menu option
+                            If key.StartsWith("menu.") Then
+                                Dim menuParts = key.Split(New Char() {"."c}, 3)
+                                If menuParts.Length >= 3 Then
+                                    Dim menuType = menuParts(1)
+                                    Dim optionKey = menuParts(2)
+
+                                    ' Make sure the menu type dictionary exists
+                                    If Not menuOptions.ContainsKey(menuType) Then
+                                        menuOptions(menuType) = New Dictionary(Of String, String)()
+                                    End If
+
+                                    ' Add the menu option
+                                    menuOptions(menuType)(optionKey) = value
+                                    Debug.WriteLine($"[2025-08-12 13:03:54] Board {boardName} menu option: {menuType}.{optionKey}={value}")
+                                End If
+                            End If
+
+                            ' Store all parameters
                             parameters(key) = value
                         End If
                     Catch ex As Exception
-                        Debug.WriteLine($"[2025-06-20 02:33:09] Error parsing parameter: {line}, {ex.Message}")
+                        Debug.WriteLine($"[2025-08-12 13:03:54] Error parsing parameter: {line}, {ex.Message}")
                     End Try
                 End If
             Next
 
             ' Build FQBN with default parameters
-            BuildBoardFQBN(boardId, boardName, parameters)
+            BuildBoardFQBN(boardId, boardName, parameters, menuOptions)
         Next
     End Sub
 
     ' Build FQBN for a board with its default parameters
-    Private Sub BuildBoardFQBN(boardId As String, boardName As String, parameters As Dictionary(Of String, String))
+    Private Sub BuildBoardFQBN(boardId As String, boardName As String, parameters As Dictionary(Of String, String), menuOptions As Dictionary(Of String, Dictionary(Of String, String)))
         ' Default configuration
         Dim vendor = "esp32"
         Dim architecture = "esp32"
         Dim paramList As New Dictionary(Of String, String)()
 
-        ' Parse build parameters for default values
-        For Each key In parameters.Keys
-            ' Look for default menu selections
-            If key.StartsWith("menu.") AndAlso key.Contains(".") Then Continue For
-
-            ' Extract default values for important parameters
-            If key = "build.flash_mode" Then
-                paramList("FlashMode") = parameters(key)
-            ElseIf key = "build.f_flash" Then
-                ' Convert Hz to MHz (e.g., 80000000L -> 80)
-                Dim flashFreq = parameters(key).Replace("L", "").Replace("UL", "")
-                If flashFreq.EndsWith("000000") Then
-                    flashFreq = (Long.Parse(flashFreq) / 1000000).ToString()
-                End If
-                paramList("FlashFreq") = flashFreq
-            ElseIf key = "build.f_cpu" Then
-                ' Convert Hz to MHz
-                Dim cpuFreq = parameters(key).Replace("L", "").Replace("UL", "")
-                If cpuFreq.EndsWith("000000") Then
-                    cpuFreq = (Long.Parse(cpuFreq) / 1000000).ToString()
-                End If
-                paramList("CPUFreq") = cpuFreq
-            ElseIf key = "build.partitions" Then
-                paramList("PartitionScheme") = parameters(key)
-            ElseIf key = "upload.speed" Then
-                paramList("UploadSpeed") = parameters(key)
-            ElseIf key = "build.core" AndAlso parameters.ContainsKey("build.variant") Then
-                ' Determine board architecture
-                architecture = parameters(key).Split(New Char() {":"c})(0)
+        ' Extract build.variant to determine the architecture if available
+        If parameters.ContainsKey("build.variant") Then
+            Dim variantValue As String = parameters("build.variant")
+            If variantValue.Contains(":") Then
+                Dim parts = variantValue.Split(New Char() {":"c}, 2)
+                architecture = parts(0)
             End If
+        End If
+
+        ' Extract build.core to determine vendor if available
+        If parameters.ContainsKey("build.core") Then
+            Dim core = parameters("build.core")
+            If core.Contains(":") Then
+                Dim parts = core.Split(New Char() {":"c}, 2)
+                vendor = parts(0)
+            End If
+        End If
+
+        ' Process menu options to extract defaults
+        For Each menuType In menuOptions.Keys
+            Select Case menuType
+                Case "PartitionScheme"
+                    ' Check for default partition scheme
+                    If parameters.ContainsKey("build.partitions") Then
+                        paramList("PartitionScheme") = parameters("build.partitions")
+                    Else
+                        paramList("PartitionScheme") = "default"
+                    End If
+
+                Case "CPUFreq"
+                    ' Check for default CPU frequency
+                    If parameters.ContainsKey("build.f_cpu") Then
+                        Dim cpuFreq = parameters("build.f_cpu").Replace("L", "").Replace("UL", "")
+                        If cpuFreq.EndsWith("000000") Then
+                            Dim freqMhz = (Long.Parse(cpuFreq) / 1000000).ToString()
+                            paramList("CPUFreq") = freqMhz
+                        End If
+                    Else
+                        paramList("CPUFreq") = "240" ' Default
+                    End If
+
+                Case "FlashMode"
+                    ' Check for default flash mode
+                    If parameters.ContainsKey("build.flash_mode") Then
+                        paramList("FlashMode") = parameters("build.flash_mode")
+                    Else
+                        paramList("FlashMode") = "dio" ' Default
+                    End If
+
+                Case "FlashFreq"
+                    ' Check for default flash frequency
+                    If parameters.ContainsKey("build.f_flash") Then
+                        Dim flashFreq = parameters("build.f_flash").Replace("L", "").Replace("UL", "")
+                        If flashFreq.EndsWith("000000") Then
+                            Dim freqMhz = (Long.Parse(flashFreq) / 1000000).ToString()
+                            paramList("FlashFreq") = freqMhz
+                        End If
+                    Else
+                        paramList("FlashFreq") = "80" ' Default
+                    End If
+
+                Case "UploadSpeed"
+                    ' Check for default upload speed
+                    If parameters.ContainsKey("upload.speed") Then
+                        paramList("UploadSpeed") = parameters("upload.speed")
+                    Else
+                        paramList("UploadSpeed") = "921600" ' Default
+                    End If
+
+                Case "DebugLevel"
+                    ' Default debug level is none
+                    paramList("DebugLevel") = "none"
+
+                Case "PSRAM"
+                    ' Default PSRAM is disabled
+                    paramList("PSRAM") = "disabled"
+
+                Case Else
+                    ' For any other menu type, try to find default
+                    Dim defaultKey = menuType.ToLower() & ".default"
+                    If parameters.ContainsKey(defaultKey) Then
+                        paramList(menuType) = parameters(defaultKey)
+                    End If
+            End Select
         Next
 
-        ' Set defaults if not found
+        ' Set defaults for core parameters if not already set
+        If Not paramList.ContainsKey("PartitionScheme") Then paramList("PartitionScheme") = "default"
         If Not paramList.ContainsKey("CPUFreq") Then paramList("CPUFreq") = "240"
         If Not paramList.ContainsKey("FlashMode") Then paramList("FlashMode") = "dio"
         If Not paramList.ContainsKey("FlashFreq") Then paramList("FlashFreq") = "80"
-        If Not paramList.ContainsKey("PartitionScheme") Then paramList("PartitionScheme") = "default"
+        If Not paramList.ContainsKey("UploadSpeed") Then paramList("UploadSpeed") = "921600"
+        If Not paramList.ContainsKey("DebugLevel") Then paramList("DebugLevel") = "none"
+        If Not paramList.ContainsKey("PSRAM") Then paramList("PSRAM") = "disabled"
 
         ' Build parameter string
         Dim paramStrings As New List(Of String)
@@ -194,39 +301,130 @@ Public Class BoardManager
         ' Add to configurations
         boardConfigurations(boardName) = fqbn
 
-        Debug.WriteLine($"[2025-06-20 02:33:09] Added board: {boardName}, FQBN: {fqbn}")
+        Debug.WriteLine($"[2025-08-12 13:03:54] Added board: {boardName}, FQBN: {fqbn}")
     End Sub
 
     ' Add default ESP32 board configurations
     Private Sub AddDefaultConfigurations()
-        ' KC-Link boards
-        boardConfigurations.Add("KC-Link PRO A8 (Default)", "esp32:esp32:esp32:PartitionScheme=default,CPUFreq=240,FlashMode=qio,FlashFreq=80")
-        boardConfigurations.Add("KC-Link PRO A8 (Minimal)", "esp32:esp32:esp32:PartitionScheme=min_spiffs,CPUFreq=240,FlashMode=qio,FlashFreq=80")
-        boardConfigurations.Add("KC-Link PRO A8 (OTA)", "esp32:esp32:esp32:PartitionScheme=min_ota,CPUFreq=240,FlashMode=qio,FlashFreq=80")
+        ' KC-Link boards with default configurations
+        boardIdMap("KC-Link PRO A8 (Default)") = "esp32"
+        boardIdMap("KC-Link PRO A8 (Minimal)") = "esp32"
+        boardIdMap("KC-Link PRO A8 (OTA)") = "esp32"
 
-        ' Add these to parameters dictionary as well
-        AddDefaultBoardParameters("KC-Link PRO A8 (Default)")
-        AddDefaultBoardParameters("KC-Link PRO A8 (Minimal)")
-        AddDefaultBoardParameters("KC-Link PRO A8 (OTA)")
+        boardConfigurations("KC-Link PRO A8 (Default)") = "esp32:esp32:esp32:PartitionScheme=default,CPUFreq=240,FlashMode=qio,FlashFreq=80"
+        boardConfigurations("KC-Link PRO A8 (Minimal)") = "esp32:esp32:esp32:PartitionScheme=min_spiffs,CPUFreq=240,FlashMode=qio,FlashFreq=80"
+        boardConfigurations("KC-Link PRO A8 (OTA)") = "esp32:esp32:esp32:PartitionScheme=min_ota,CPUFreq=240,FlashMode=qio,FlashFreq=80"
+
+        ' Initialize menu options dictionaries for KC-Link boards
+        boardMenuOptions("KC-Link PRO A8 (Default)") = CreateDefaultMenuOptions()
+        boardMenuOptions("KC-Link PRO A8 (Minimal)") = CreateDefaultMenuOptions()
+        boardMenuOptions("KC-Link PRO A8 (OTA)") = CreateDefaultMenuOptions()
+
+        ' Initialize parameter dictionaries for KC-Link boards
+        boardParameters("KC-Link PRO A8 (Default)") = CreateDefaultBoardParameters()
+        boardParameters("KC-Link PRO A8 (Minimal)") = CreateDefaultBoardParameters()
+        boardParameters("KC-Link PRO A8 (OTA)") = CreateDefaultBoardParameters()
 
         ' Standard ESP32 boards - these will be overridden by boards.txt if available
-        boardConfigurations.Add("ESP32 Dev Module", "esp32:esp32:esp32:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80")
-        boardConfigurations.Add("ESP32 Wrover Kit", "esp32:esp32:esp32wrover:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80")
-        boardConfigurations.Add("ESP32 Pico Kit", "esp32:esp32:pico32:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80")
-        boardConfigurations.Add("ESP32-S2 Dev Module", "esp32:esp32:esp32s2:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80")
-        boardConfigurations.Add("ESP32-S3 Dev Module", "esp32:esp32:esp32s3:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80")
-        boardConfigurations.Add("ESP32-C3 Dev Module", "esp32:esp32:esp32c3:PartitionScheme=default,CPUFreq=160,FlashMode=dio,FlashFreq=80")
+        boardIdMap("ESP32 Dev Module") = "esp32"
+        boardIdMap("ESP32 Wrover Kit") = "esp32wrover"
+        boardIdMap("ESP32 Pico Kit") = "pico32"
+        boardIdMap("ESP32-S2 Dev Module") = "esp32s2"
+        boardIdMap("ESP32-S3 Dev Module") = "esp32s3"
+        boardIdMap("ESP32-C3 Dev Module") = "esp32c3"
 
-        AddDefaultBoardParameters("ESP32 Dev Module")
-        AddDefaultBoardParameters("ESP32 Wrover Kit")
-        AddDefaultBoardParameters("ESP32 Pico Kit")
-        AddDefaultBoardParameters("ESP32-S2 Dev Module")
-        AddDefaultBoardParameters("ESP32-S3 Dev Module")
-        AddDefaultBoardParameters("ESP32-C3 Dev Module")
+        boardConfigurations("ESP32 Dev Module") = "esp32:esp32:esp32:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80"
+        boardConfigurations("ESP32 Wrover Kit") = "esp32:esp32:esp32wrover:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80"
+        boardConfigurations("ESP32 Pico Kit") = "esp32:esp32:pico32:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80"
+        boardConfigurations("ESP32-S2 Dev Module") = "esp32:esp32:esp32s2:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80"
+        boardConfigurations("ESP32-S3 Dev Module") = "esp32:esp32:esp32s3:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80"
+        boardConfigurations("ESP32-C3 Dev Module") = "esp32:esp32:esp32c3:PartitionScheme=default,CPUFreq=160,FlashMode=dio,FlashFreq=80"
+
+        ' Initialize menu options dictionaries for standard boards
+        boardMenuOptions("ESP32 Dev Module") = CreateDefaultMenuOptions()
+        boardMenuOptions("ESP32 Wrover Kit") = CreateDefaultMenuOptions()
+        boardMenuOptions("ESP32 Pico Kit") = CreateDefaultMenuOptions()
+        boardMenuOptions("ESP32-S2 Dev Module") = CreateDefaultMenuOptions()
+        boardMenuOptions("ESP32-S3 Dev Module") = CreateDefaultMenuOptions()
+        boardMenuOptions("ESP32-C3 Dev Module") = CreateDefaultMenuOptions()
+
+        ' Initialize parameter dictionaries for standard boards
+        boardParameters("ESP32 Dev Module") = CreateDefaultBoardParameters()
+        boardParameters("ESP32 Wrover Kit") = CreateDefaultBoardParameters()
+        boardParameters("ESP32 Pico Kit") = CreateDefaultBoardParameters()
+        boardParameters("ESP32-S2 Dev Module") = CreateDefaultBoardParameters()
+        boardParameters("ESP32-S3 Dev Module") = CreateDefaultBoardParameters()
+        boardParameters("ESP32-C3 Dev Module") = CreateDefaultBoardParameters()
     End Sub
 
-    ' Add default parameters for a board
-    Private Sub AddDefaultBoardParameters(boardName As String)
+    ' Create default menu options for ESP32 boards
+    Private Function CreateDefaultMenuOptions() As Dictionary(Of String, Dictionary(Of String, String))
+        Dim menuOptions As New Dictionary(Of String, Dictionary(Of String, String))
+
+        ' CPU Frequency options
+        Dim cpuFreqOptions As New Dictionary(Of String, String)
+        cpuFreqOptions.Add("240", "240MHz")
+        cpuFreqOptions.Add("160", "160MHz")
+        cpuFreqOptions.Add("80", "80MHz")
+        cpuFreqOptions.Add("40", "40MHz")
+        cpuFreqOptions.Add("20", "20MHz")
+        cpuFreqOptions.Add("10", "10MHz")
+        menuOptions.Add("CPUFreq", cpuFreqOptions)
+
+        ' Flash Mode options
+        Dim flashModeOptions As New Dictionary(Of String, String)
+        flashModeOptions.Add("qio", "QIO")
+        flashModeOptions.Add("dio", "DIO")
+        flashModeOptions.Add("qout", "QOUT")
+        flashModeOptions.Add("dout", "DOUT")
+        menuOptions.Add("FlashMode", flashModeOptions)
+
+        ' Flash Frequency options
+        Dim flashFreqOptions As New Dictionary(Of String, String)
+        flashFreqOptions.Add("80", "80MHz")
+        flashFreqOptions.Add("40", "40MHz")
+        flashFreqOptions.Add("20", "20MHz")
+        menuOptions.Add("FlashFreq", flashFreqOptions)
+
+        ' Partition Scheme options
+        Dim partitionOptions As New Dictionary(Of String, String)
+        partitionOptions.Add("default", "Default")
+        partitionOptions.Add("min_spiffs", "Minimal SPIFFS")
+        partitionOptions.Add("min_ota", "Minimal OTA")
+        partitionOptions.Add("huge_app", "Huge APP")
+        partitionOptions.Add("no_ota", "No OTA")
+        partitionOptions.Add("custom", "Custom")
+        menuOptions.Add("PartitionScheme", partitionOptions)
+
+        ' Upload Speed options
+        Dim uploadSpeedOptions As New Dictionary(Of String, String)
+        uploadSpeedOptions.Add("921600", "921600")
+        uploadSpeedOptions.Add("460800", "460800")
+        uploadSpeedOptions.Add("230400", "230400")
+        uploadSpeedOptions.Add("115200", "115200")
+        menuOptions.Add("UploadSpeed", uploadSpeedOptions)
+
+        ' Debug Level options
+        Dim debugOptions As New Dictionary(Of String, String)
+        debugOptions.Add("none", "None")
+        debugOptions.Add("error", "Error")
+        debugOptions.Add("warn", "Warning")
+        debugOptions.Add("info", "Info")
+        debugOptions.Add("debug", "Debug")
+        debugOptions.Add("verbose", "Verbose")
+        menuOptions.Add("DebugLevel", debugOptions)
+
+        ' PSRAM options
+        Dim psramOptions As New Dictionary(Of String, String)
+        psramOptions.Add("disabled", "Disabled")
+        psramOptions.Add("enabled", "Enabled")
+        menuOptions.Add("PSRAM", psramOptions)
+
+        Return menuOptions
+    End Function
+
+    ' Create default parameters for a board
+    Private Function CreateDefaultBoardParameters() As Dictionary(Of String, String)
         Dim parameters As New Dictionary(Of String, String)()
 
         ' Common menu parameters
@@ -236,17 +434,22 @@ Public Class BoardManager
         parameters("menu.FlashFreq") = "Flash Frequency"
         parameters("menu.UploadSpeed") = "Upload Speed"
         parameters("menu.DebugLevel") = "Debug Level"
+        parameters("menu.PSRAM") = "PSRAM"
 
         ' Default values
         parameters("menu.PartitionScheme.default") = "Default"
         parameters("menu.PartitionScheme.min_spiffs") = "Minimal SPIFFS"
         parameters("menu.PartitionScheme.min_ota") = "Minimal OTA"
-        parameters("menu.PartitionScheme.huge_app") = "Huge App"
+        parameters("menu.PartitionScheme.huge_app") = "Huge APP"
+        parameters("menu.PartitionScheme.no_ota") = "No OTA"
         parameters("menu.PartitionScheme.custom") = "Custom"
 
         parameters("menu.CPUFreq.240") = "240MHz"
         parameters("menu.CPUFreq.160") = "160MHz"
         parameters("menu.CPUFreq.80") = "80MHz"
+        parameters("menu.CPUFreq.40") = "40MHz"
+        parameters("menu.CPUFreq.20") = "20MHz"
+        parameters("menu.CPUFreq.10") = "10MHz"
 
         parameters("menu.FlashMode.qio") = "QIO"
         parameters("menu.FlashMode.dio") = "DIO"
@@ -255,6 +458,7 @@ Public Class BoardManager
 
         parameters("menu.FlashFreq.80") = "80MHz"
         parameters("menu.FlashFreq.40") = "40MHz"
+        parameters("menu.FlashFreq.20") = "20MHz"
 
         parameters("menu.UploadSpeed.921600") = "921600"
         parameters("menu.UploadSpeed.460800") = "460800"
@@ -268,9 +472,11 @@ Public Class BoardManager
         parameters("menu.DebugLevel.debug") = "Debug"
         parameters("menu.DebugLevel.verbose") = "Verbose"
 
-        ' Add to board parameters dictionary
-        boardParameters(boardName) = parameters
-    End Sub
+        parameters("menu.PSRAM.disabled") = "Disabled"
+        parameters("menu.PSRAM.enabled") = "Enabled"
+
+        Return parameters
+    End Function
 
     Public Function GetFQBN(boardName As String) As String
         ' Return the FQBN for the given board name
@@ -287,6 +493,16 @@ Public Class BoardManager
         Return New List(Of String)(boardConfigurations.Keys)
     End Function
 
+    Public Function GetBoardId(boardName As String) As String
+        ' Return the board ID for a given board name
+        If boardIdMap.ContainsKey(boardName) Then
+            Return boardIdMap(boardName)
+        Else
+            ' Default board ID for ESP32
+            Return "esp32"
+        End If
+    End Function
+
     Public Function GetBoardParameters(boardName As String) As Dictionary(Of String, String)
         ' Return parameters for the given board
         If boardParameters.ContainsKey(boardName) Then
@@ -297,9 +513,26 @@ Public Class BoardManager
         End If
     End Function
 
+    Public Function GetMenuOptions(boardName As String) As Dictionary(Of String, Dictionary(Of String, String))
+        ' Return menu options for the given board
+        If boardMenuOptions.ContainsKey(boardName) Then
+            Return boardMenuOptions(boardName)
+        Else
+            ' Return default menu options if board not found
+            Return CreateDefaultMenuOptions()
+        End If
+    End Function
+
     Public Function GetParameterOptions(boardName As String, paramName As String) As Dictionary(Of String, String)
         Dim result As New Dictionary(Of String, String)()
 
+        ' First check if we have menu options for this board and parameter
+        If boardMenuOptions.ContainsKey(boardName) AndAlso boardMenuOptions(boardName).ContainsKey(paramName) Then
+            ' Return the menu options for this parameter
+            Return New Dictionary(Of String, String)(boardMenuOptions(boardName)(paramName))
+        End If
+
+        ' Fall back to looking in board parameters
         If boardParameters.ContainsKey(boardName) Then
             Dim parameters = boardParameters(boardName)
             Dim prefix = $"menu.{paramName}."
@@ -320,6 +553,9 @@ Public Class BoardManager
                     result.Add("240", "240MHz")
                     result.Add("160", "160MHz")
                     result.Add("80", "80MHz")
+                    result.Add("40", "40MHz")
+                    result.Add("20", "20MHz")
+                    result.Add("10", "10MHz")
                 Case "FlashMode"
                     result.Add("qio", "QIO")
                     result.Add("dio", "DIO")
@@ -328,11 +564,13 @@ Public Class BoardManager
                 Case "FlashFreq"
                     result.Add("80", "80MHz")
                     result.Add("40", "40MHz")
+                    result.Add("20", "20MHz")
                 Case "PartitionScheme"
                     result.Add("default", "Default")
                     result.Add("min_spiffs", "Minimal SPIFFS")
                     result.Add("min_ota", "Minimal OTA")
-                    result.Add("huge_app", "Huge App")
+                    result.Add("huge_app", "Huge APP")
+                    result.Add("no_ota", "No OTA")
                     result.Add("custom", "Custom")
                 Case "UploadSpeed"
                     result.Add("921600", "921600")
@@ -371,6 +609,11 @@ Public Class BoardManager
                 Return "min_ota"
             ElseIf boardName.Contains("Minimal") Then
                 Return "min_spiffs"
+            End If
+
+            ' Check if the board parameters contain build.partitions
+            If boardParameters.ContainsKey(boardName) AndAlso boardParameters(boardName).ContainsKey("build.partitions") Then
+                Return boardParameters(boardName)("build.partitions")
             End If
         End If
 
@@ -428,11 +671,11 @@ Public Class BoardManager
                 File.Copy(filePath, destFile, True)
 
                 ' Log success
-                Debug.WriteLine($"[2025-06-20 02:33:09] Custom partition file copied to {destFile}")
+                Debug.WriteLine($"[2025-08-12 13:03:54] Custom partition file copied to {destFile}")
             End If
         Catch ex As Exception
             ' Log error but continue
-            Debug.WriteLine($"[2025-06-20 02:33:09] Error copying custom partition file: {ex.Message}")
+            Debug.WriteLine($"[2025-08-12 13:03:54] Error copying custom partition file: {ex.Message}")
         End Try
     End Sub
 
@@ -468,6 +711,7 @@ Public Class BoardManager
     Public Sub UpdateBoardConfiguration(boardName As String, parameters As Dictionary(Of String, String))
         If boardConfigurations.ContainsKey(boardName) Then
             Dim fqbn = boardConfigurations(boardName)
+            Dim boardId = GetBoardId(boardName)
 
             ' Parse the FQBN into parts
             Dim parts = fqbn.Split(New Char() {":"c})
@@ -477,11 +721,36 @@ Public Class BoardManager
                 ' Extract vendor, architecture, board ID
                 Dim vendor = parts(0)
                 Dim architecture = parts(1)
-                Dim boardId = parts(2)
 
                 ' Build parameter string
                 Dim paramList As New List(Of String)
+
+                ' Add partition scheme first if available
+                If parameters.ContainsKey("PartitionScheme") Then
+                    paramList.Add($"PartitionScheme={parameters("PartitionScheme")}")
+                End If
+
+                ' Add remaining parameters
                 For Each kvp In parameters
+                    ' Skip partition scheme as it's already added
+                    If kvp.Key = "PartitionScheme" Then
+                        Continue For
+                    End If
+
+                    ' Skip empty parameters
+                    If String.IsNullOrEmpty(kvp.Value) Then
+                        Continue For
+                    End If
+
+                    ' Skip default values for DebugLevel and PSRAM
+                    If (kvp.Key = "DebugLevel" AndAlso kvp.Value = "none") Then
+                        Continue For
+                    End If
+
+                    If (kvp.Key = "PSRAM" AndAlso kvp.Value = "disabled") Then
+                        Continue For
+                    End If
+
                     paramList.Add($"{kvp.Key}={kvp.Value}")
                 Next
 
@@ -497,8 +766,8 @@ Public Class BoardManager
                 boardConfigurations(boardName) = newFqbn
 
                 ' Log the change
-                Debug.WriteLine($"[2025-06-20 02:33:09] Updated board configuration for {boardName}: {newFqbn}")
-                Debug.WriteLine($"[2025-06-20 02:33:09] Configuration updated by Chamil1983")
+                Debug.WriteLine($"[2025-08-12 13:03:54] Updated board configuration for {boardName}: {newFqbn}")
+                Debug.WriteLine($"[2025-08-12 13:03:54] Configuration updated by Chamil1983")
             End If
         Else
             ' Add new board configuration
@@ -521,7 +790,32 @@ Public Class BoardManager
 
             ' Build parameter string
             Dim paramList As New List(Of String)
+
+            ' Add partition scheme first if available
+            If parameters.ContainsKey("PartitionScheme") Then
+                paramList.Add($"PartitionScheme={parameters("PartitionScheme")}")
+            End If
+
+            ' Add remaining parameters
             For Each kvp In parameters
+                ' Skip partition scheme as it's already added
+                If kvp.Key = "PartitionScheme" Then
+                    Continue For
+                End If
+
+                If String.IsNullOrEmpty(kvp.Value) Then
+                    Continue For
+                End If
+
+                ' Skip default values for DebugLevel and PSRAM
+                If (kvp.Key = "DebugLevel" AndAlso kvp.Value = "none") Then
+                    Continue For
+                End If
+
+                If (kvp.Key = "PSRAM" AndAlso kvp.Value = "disabled") Then
+                    Continue For
+                End If
+
                 paramList.Add($"{kvp.Key}={kvp.Value}")
             Next
 
@@ -535,10 +829,11 @@ Public Class BoardManager
 
             ' Add the configuration
             boardConfigurations(boardName) = newFqbn
+            boardIdMap(boardName) = boardId
 
             ' Log the addition
-            Debug.WriteLine($"[2025-06-20 02:33:09] Added new board configuration for {boardName}: {newFqbn}")
-            Debug.WriteLine($"[2025-06-20 02:33:09] Configuration created by Chamil1983")
+            Debug.WriteLine($"[2025-08-12 13:03:54] Added new board configuration for {boardName}: {newFqbn}")
+            Debug.WriteLine($"[2025-08-12 13:03:54] Configuration created by Chamil1983")
         End If
     End Sub
 
@@ -580,7 +875,7 @@ Public Class BoardManager
                 Next
             Catch ex As Exception
                 ' Ignore errors
-                Debug.WriteLine($"[2025-06-20 02:33:09] Error reading partition files: {ex.Message}")
+                Debug.WriteLine($"[2025-08-12 13:03:54] Error reading partition files: {ex.Message}")
             End Try
         End If
 
@@ -597,8 +892,103 @@ Public Class BoardManager
         If Not partitionsList.Contains("huge_app") Then
             partitionsList.Add("huge_app")
         End If
+        If Not partitionsList.Contains("no_ota") Then
+            partitionsList.Add("no_ota")
+        End If
 
         Return partitionsList.Distinct().ToList()
+    End Function
+
+    ' Extract all parameters from FQBN
+    Public Function ExtractParametersFromFQBN(fqbn As String) As Dictionary(Of String, String)
+        Dim parameters As New Dictionary(Of String, String)()
+
+        ' Default values
+        parameters("CPUFreq") = "240"
+        parameters("FlashMode") = "dio"
+        parameters("FlashFreq") = "80"
+        parameters("PartitionScheme") = "default"
+        parameters("UploadSpeed") = "921600"
+        parameters("DebugLevel") = "none"
+        parameters("PSRAM") = "disabled"
+
+        ' Parse parameters from FQBN
+        If fqbn.Contains(":") Then
+            Dim parts = fqbn.Split(New Char() {":"c})
+            If parts.Length >= 4 Then
+                Dim paramPart = parts(3)
+                Dim paramPairs = paramPart.Split(New Char() {","c})
+
+                For Each pair In paramPairs
+                    If pair.Contains("=") Then
+                        Dim keyValue = pair.Split(New Char() {"="c}, 2)
+                        If keyValue.Length = 2 Then
+                            parameters(keyValue(0)) = keyValue(1)
+                        End If
+                    End If
+                Next
+            End If
+        End If
+
+        Return parameters
+    End Function
+
+    ' Get all available configuration options for a board with user-friendly values
+    Public Function GetAllBoardConfigOptions(boardName As String) As Dictionary(Of String, List(Of KeyValuePair(Of String, String)))
+        Dim allOptions As New Dictionary(Of String, List(Of KeyValuePair(Of String, String)))
+
+        ' Standard configuration categories
+        Dim standardCategories As String() = {"CPUFreq", "FlashMode", "FlashFreq", "PartitionScheme", "UploadSpeed", "DebugLevel", "PSRAM"}
+
+        ' Get menu options for the board
+        If boardMenuOptions.ContainsKey(boardName) Then
+            For Each category In standardCategories
+                If boardMenuOptions(boardName).ContainsKey(category) Then
+                    Dim options As New List(Of KeyValuePair(Of String, String))
+
+                    ' Convert dictionary to sorted list of KeyValuePairs
+                    For Each kvp In boardMenuOptions(boardName)(category)
+                        options.Add(New KeyValuePair(Of String, String)(kvp.Key, kvp.Value))
+                    Next
+
+                    ' Add to result dictionary
+                    allOptions(category) = options
+                End If
+            Next
+
+            ' Add any board-specific categories not in the standard list
+            For Each category In boardMenuOptions(boardName).Keys
+                If Not standardCategories.Contains(category) AndAlso Not allOptions.ContainsKey(category) Then
+                    Dim options As New List(Of KeyValuePair(Of String, String))
+
+                    ' Convert dictionary to sorted list of KeyValuePairs
+                    For Each kvp In boardMenuOptions(boardName)(category)
+                        options.Add(New KeyValuePair(Of String, String)(kvp.Key, kvp.Value))
+                    Next
+
+                    ' Add to result dictionary
+                    allOptions(category) = options
+                End If
+            Next
+        End If
+
+        ' If options are still missing, add defaults
+        For Each category In standardCategories
+            If Not allOptions.ContainsKey(category) Then
+                Dim defaultOptions = GetParameterOptions(boardName, category)
+                Dim options As New List(Of KeyValuePair(Of String, String))
+
+                ' Convert dictionary to sorted list of KeyValuePairs
+                For Each kvp In defaultOptions
+                    options.Add(New KeyValuePair(Of String, String)(kvp.Key, kvp.Value))
+                Next
+
+                ' Add to result dictionary
+                allOptions(category) = options
+            End If
+        Next
+
+        Return allOptions
     End Function
 
     ' Helper class to sort version directories

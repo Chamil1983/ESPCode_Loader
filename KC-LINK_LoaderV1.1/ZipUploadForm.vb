@@ -7,7 +7,7 @@ Imports System.Threading
 Imports System.IO.Compression
 
 
-Namespace KC_LINK_LoaderV1
+Namespace KC_LINK_LoaderV1._1
     Public Class ZipUploadForm
         Inherits Form
 
@@ -504,10 +504,10 @@ Namespace KC_LINK_LoaderV1
                 End If
 
                 ' Default addresses from BinaryExporter class
-                Dim bootloaderAddr As String = KC_LINK_LoaderV1.BinaryExporter.DefaultBootloaderAddress    ' 0x1000
-                Dim partitionAddr As String = KC_LINK_LoaderV1.BinaryExporter.DefaultPartitionAddress      ' 0x8000
-                Dim bootAppAddr As String = KC_LINK_LoaderV1.BinaryExporter.DefaultBootApp0Address         ' 0xe000
-                Dim applicationAddr As String = KC_LINK_LoaderV1.BinaryExporter.DefaultApplicationAddress  ' 0x10000
+                Dim bootloaderAddr As String = KC_LINK_LoaderV1._1.BinaryExporter.DefaultBootloaderAddress    ' 0x1000
+                Dim partitionAddr As String = KC_LINK_LoaderV1._1.BinaryExporter.DefaultPartitionAddress      ' 0x8000
+                Dim bootAppAddr As String = KC_LINK_LoaderV1._1.BinaryExporter.DefaultBootApp0Address         ' 0xe000
+                Dim applicationAddr As String = KC_LINK_LoaderV1._1.BinaryExporter.DefaultApplicationAddress  ' 0x10000
 
                 worker.ReportProgress(35, "Using standard ESP32 flash addresses:")
                 worker.ReportProgress(35, "Bootloader: " & bootloaderAddr)

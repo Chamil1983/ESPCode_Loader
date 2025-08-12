@@ -7,7 +7,7 @@ Imports System.Threading
 Imports System.IO.Ports
 
 
-Namespace KC_LINK_LoaderV1
+Namespace KC_LINK_LoaderV1._1
     Public Class BinaryUploadForm
         Inherits Form
 
@@ -62,246 +62,408 @@ Namespace KC_LINK_LoaderV1
         End Sub
 
         Private Sub InitializeComponent()
-            ' Form setup
-            Me.Text = "ESP32 Binary Upload"
-            Me.Size = New Size(700, 600)
-            Me.StartPosition = FormStartPosition.CenterParent
-            Me.FormBorderStyle = FormBorderStyle.FixedDialog
+            Me.mainLayout = New System.Windows.Forms.TableLayoutPanel()
+            Me.binaryFilesPanel = New System.Windows.Forms.TableLayoutPanel()
+            Me.lblBootloader = New System.Windows.Forms.Label()
+            Me.txtBootloaderPath = New System.Windows.Forms.TextBox()
+            Me.btnBrowseBootloader = New System.Windows.Forms.Button()
+            Me.txtBootloaderAddr = New System.Windows.Forms.TextBox()
+            Me.lblPartition = New System.Windows.Forms.Label()
+            Me.txtPartitionPath = New System.Windows.Forms.TextBox()
+            Me.btnBrowsePartition = New System.Windows.Forms.Button()
+            Me.txtPartitionAddr = New System.Windows.Forms.TextBox()
+            Me.lblBootApp0 = New System.Windows.Forms.Label()
+            Me.txtBootApp0Path = New System.Windows.Forms.TextBox()
+            Me.btnBrowseBootApp0 = New System.Windows.Forms.Button()
+            Me.txtBootApp0Addr = New System.Windows.Forms.TextBox()
+            Me.lblApplication = New System.Windows.Forms.Label()
+            Me.txtApplicationPath = New System.Windows.Forms.TextBox()
+            Me.btnBrowseApplication = New System.Windows.Forms.Button()
+            Me.txtApplicationAddr = New System.Windows.Forms.TextBox()
+            Me.serialPortPanel = New System.Windows.Forms.TableLayoutPanel()
+            Me.lblSerialPort = New System.Windows.Forms.Label()
+            Me.cmbSerialPort = New System.Windows.Forms.ComboBox()
+            Me.btnRefreshPorts = New System.Windows.Forms.Button()
+            Me.buttonsPanel = New System.Windows.Forms.FlowLayoutPanel()
+            Me.btnCancel = New System.Windows.Forms.Button()
+            Me.btnUpload = New System.Windows.Forms.Button()
+            Me.progressBar = New System.Windows.Forms.ProgressBar()
+            Me.txtOutput = New System.Windows.Forms.RichTextBox()
+            Me.lblBootloaderAddr = New System.Windows.Forms.Label()
+            Me.lblPartitionAddr = New System.Windows.Forms.Label()
+            Me.lblBootApp0Addr = New System.Windows.Forms.Label()
+            Me.lblApplicationAddr = New System.Windows.Forms.Label()
+            Me.bgWorker = New System.ComponentModel.BackgroundWorker()
+            Me.mainLayout.SuspendLayout()
+            Me.binaryFilesPanel.SuspendLayout()
+            Me.serialPortPanel.SuspendLayout()
+            Me.buttonsPanel.SuspendLayout()
+            Me.SuspendLayout()
+            '
+            'mainLayout
+            '
+            Me.mainLayout.ColumnCount = 1
+            Me.mainLayout.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 20.0!))
+            Me.mainLayout.Controls.Add(Me.binaryFilesPanel, 0, 0)
+            Me.mainLayout.Controls.Add(Me.serialPortPanel, 0, 2)
+            Me.mainLayout.Controls.Add(Me.buttonsPanel, 0, 4)
+            Me.mainLayout.Controls.Add(Me.progressBar, 0, 5)
+            Me.mainLayout.Controls.Add(Me.txtOutput, 0, 6)
+            Me.mainLayout.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.mainLayout.Location = New System.Drawing.Point(0, 0)
+            Me.mainLayout.Name = "mainLayout"
+            Me.mainLayout.Padding = New System.Windows.Forms.Padding(10)
+            Me.mainLayout.RowCount = 7
+            Me.mainLayout.RowStyles.Add(New System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 200.0!))
+            Me.mainLayout.RowStyles.Add(New System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 10.0!))
+            Me.mainLayout.RowStyles.Add(New System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 40.0!))
+            Me.mainLayout.RowStyles.Add(New System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 10.0!))
+            Me.mainLayout.RowStyles.Add(New System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 40.0!))
+            Me.mainLayout.RowStyles.Add(New System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 30.0!))
+            Me.mainLayout.RowStyles.Add(New System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100.0!))
+            Me.mainLayout.Size = New System.Drawing.Size(684, 561)
+            Me.mainLayout.TabIndex = 0
+            '
+            'binaryFilesPanel
+            '
+            Me.binaryFilesPanel.ColumnCount = 4
+            Me.binaryFilesPanel.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 100.0!))
+            Me.binaryFilesPanel.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100.0!))
+            Me.binaryFilesPanel.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 80.0!))
+            Me.binaryFilesPanel.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 100.0!))
+            Me.binaryFilesPanel.Controls.Add(Me.lblBootloader, 0, 0)
+            Me.binaryFilesPanel.Controls.Add(Me.txtBootloaderPath, 1, 0)
+            Me.binaryFilesPanel.Controls.Add(Me.btnBrowseBootloader, 2, 0)
+            Me.binaryFilesPanel.Controls.Add(Me.txtBootloaderAddr, 3, 0)
+            Me.binaryFilesPanel.Controls.Add(Me.lblPartition, 0, 1)
+            Me.binaryFilesPanel.Controls.Add(Me.txtPartitionPath, 1, 1)
+            Me.binaryFilesPanel.Controls.Add(Me.btnBrowsePartition, 2, 1)
+            Me.binaryFilesPanel.Controls.Add(Me.txtPartitionAddr, 3, 1)
+            Me.binaryFilesPanel.Controls.Add(Me.lblBootApp0, 0, 2)
+            Me.binaryFilesPanel.Controls.Add(Me.txtBootApp0Path, 1, 2)
+            Me.binaryFilesPanel.Controls.Add(Me.btnBrowseBootApp0, 2, 2)
+            Me.binaryFilesPanel.Controls.Add(Me.txtBootApp0Addr, 3, 2)
+            Me.binaryFilesPanel.Controls.Add(Me.lblApplication, 0, 3)
+            Me.binaryFilesPanel.Controls.Add(Me.txtApplicationPath, 1, 3)
+            Me.binaryFilesPanel.Controls.Add(Me.btnBrowseApplication, 2, 3)
+            Me.binaryFilesPanel.Controls.Add(Me.txtApplicationAddr, 3, 3)
+            Me.binaryFilesPanel.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.binaryFilesPanel.Location = New System.Drawing.Point(13, 13)
+            Me.binaryFilesPanel.Name = "binaryFilesPanel"
+            Me.binaryFilesPanel.RowCount = 4
+            Me.binaryFilesPanel.RowStyles.Add(New System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 25.0!))
+            Me.binaryFilesPanel.RowStyles.Add(New System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 25.0!))
+            Me.binaryFilesPanel.RowStyles.Add(New System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 25.0!))
+            Me.binaryFilesPanel.RowStyles.Add(New System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 25.0!))
+            Me.binaryFilesPanel.Size = New System.Drawing.Size(658, 194)
+            Me.binaryFilesPanel.TabIndex = 0
+            '
+            'lblBootloader
+            '
+            Me.lblBootloader.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.lblBootloader.Location = New System.Drawing.Point(3, 0)
+            Me.lblBootloader.Name = "lblBootloader"
+            Me.lblBootloader.Size = New System.Drawing.Size(94, 48)
+            Me.lblBootloader.TabIndex = 0
+            Me.lblBootloader.Text = "Bootloader:"
+            Me.lblBootloader.TextAlign = System.Drawing.ContentAlignment.MiddleRight
+            '
+            'txtBootloaderPath
+            '
+            Me.txtBootloaderPath.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.txtBootloaderPath.Location = New System.Drawing.Point(103, 3)
+            Me.txtBootloaderPath.Name = "txtBootloaderPath"
+            Me.txtBootloaderPath.Size = New System.Drawing.Size(372, 20)
+            Me.txtBootloaderPath.TabIndex = 1
+            '
+            'btnBrowseBootloader
+            '
+            Me.btnBrowseBootloader.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.btnBrowseBootloader.Location = New System.Drawing.Point(481, 3)
+            Me.btnBrowseBootloader.Name = "btnBrowseBootloader"
+            Me.btnBrowseBootloader.Size = New System.Drawing.Size(74, 42)
+            Me.btnBrowseBootloader.TabIndex = 2
+            Me.btnBrowseBootloader.Text = "Browse..."
+            '
+            'txtBootloaderAddr
+            '
+            Me.txtBootloaderAddr.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.txtBootloaderAddr.Location = New System.Drawing.Point(561, 3)
+            Me.txtBootloaderAddr.Name = "txtBootloaderAddr"
+            Me.txtBootloaderAddr.Size = New System.Drawing.Size(94, 20)
+            Me.txtBootloaderAddr.TabIndex = 3
+            Me.txtBootloaderAddr.Text = "0x1000"
+            '
+            'lblPartition
+            '
+            Me.lblPartition.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.lblPartition.Location = New System.Drawing.Point(3, 48)
+            Me.lblPartition.Name = "lblPartition"
+            Me.lblPartition.Size = New System.Drawing.Size(94, 48)
+            Me.lblPartition.TabIndex = 4
+            Me.lblPartition.Text = "Partition Table:"
+            Me.lblPartition.TextAlign = System.Drawing.ContentAlignment.MiddleRight
+            '
+            'txtPartitionPath
+            '
+            Me.txtPartitionPath.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.txtPartitionPath.Location = New System.Drawing.Point(103, 51)
+            Me.txtPartitionPath.Name = "txtPartitionPath"
+            Me.txtPartitionPath.Size = New System.Drawing.Size(372, 20)
+            Me.txtPartitionPath.TabIndex = 5
+            '
+            'btnBrowsePartition
+            '
+            Me.btnBrowsePartition.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.btnBrowsePartition.Location = New System.Drawing.Point(481, 51)
+            Me.btnBrowsePartition.Name = "btnBrowsePartition"
+            Me.btnBrowsePartition.Size = New System.Drawing.Size(74, 42)
+            Me.btnBrowsePartition.TabIndex = 6
+            Me.btnBrowsePartition.Text = "Browse..."
+            '
+            'txtPartitionAddr
+            '
+            Me.txtPartitionAddr.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.txtPartitionAddr.Location = New System.Drawing.Point(561, 51)
+            Me.txtPartitionAddr.Name = "txtPartitionAddr"
+            Me.txtPartitionAddr.Size = New System.Drawing.Size(94, 20)
+            Me.txtPartitionAddr.TabIndex = 7
+            Me.txtPartitionAddr.Text = "0x8000"
+            '
+            'lblBootApp0
+            '
+            Me.lblBootApp0.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.lblBootApp0.Location = New System.Drawing.Point(3, 96)
+            Me.lblBootApp0.Name = "lblBootApp0"
+            Me.lblBootApp0.Size = New System.Drawing.Size(94, 48)
+            Me.lblBootApp0.TabIndex = 8
+            Me.lblBootApp0.Text = "Boot App 0:"
+            Me.lblBootApp0.TextAlign = System.Drawing.ContentAlignment.MiddleRight
+            '
+            'txtBootApp0Path
+            '
+            Me.txtBootApp0Path.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.txtBootApp0Path.Location = New System.Drawing.Point(103, 99)
+            Me.txtBootApp0Path.Name = "txtBootApp0Path"
+            Me.txtBootApp0Path.Size = New System.Drawing.Size(372, 20)
+            Me.txtBootApp0Path.TabIndex = 9
+            '
+            'btnBrowseBootApp0
+            '
+            Me.btnBrowseBootApp0.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.btnBrowseBootApp0.Location = New System.Drawing.Point(481, 99)
+            Me.btnBrowseBootApp0.Name = "btnBrowseBootApp0"
+            Me.btnBrowseBootApp0.Size = New System.Drawing.Size(74, 42)
+            Me.btnBrowseBootApp0.TabIndex = 10
+            Me.btnBrowseBootApp0.Text = "Browse..."
+            '
+            'txtBootApp0Addr
+            '
+            Me.txtBootApp0Addr.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.txtBootApp0Addr.Location = New System.Drawing.Point(561, 99)
+            Me.txtBootApp0Addr.Name = "txtBootApp0Addr"
+            Me.txtBootApp0Addr.Size = New System.Drawing.Size(94, 20)
+            Me.txtBootApp0Addr.TabIndex = 11
+            Me.txtBootApp0Addr.Text = "0xe000"
+            '
+            'lblApplication
+            '
+            Me.lblApplication.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.lblApplication.Location = New System.Drawing.Point(3, 144)
+            Me.lblApplication.Name = "lblApplication"
+            Me.lblApplication.Size = New System.Drawing.Size(94, 50)
+            Me.lblApplication.TabIndex = 12
+            Me.lblApplication.Text = "Application:"
+            Me.lblApplication.TextAlign = System.Drawing.ContentAlignment.MiddleRight
+            '
+            'txtApplicationPath
+            '
+            Me.txtApplicationPath.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.txtApplicationPath.Location = New System.Drawing.Point(103, 147)
+            Me.txtApplicationPath.Name = "txtApplicationPath"
+            Me.txtApplicationPath.Size = New System.Drawing.Size(372, 20)
+            Me.txtApplicationPath.TabIndex = 13
+            '
+            'btnBrowseApplication
+            '
+            Me.btnBrowseApplication.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.btnBrowseApplication.Location = New System.Drawing.Point(481, 147)
+            Me.btnBrowseApplication.Name = "btnBrowseApplication"
+            Me.btnBrowseApplication.Size = New System.Drawing.Size(74, 44)
+            Me.btnBrowseApplication.TabIndex = 14
+            Me.btnBrowseApplication.Text = "Browse..."
+            '
+            'txtApplicationAddr
+            '
+            Me.txtApplicationAddr.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.txtApplicationAddr.Location = New System.Drawing.Point(561, 147)
+            Me.txtApplicationAddr.Name = "txtApplicationAddr"
+            Me.txtApplicationAddr.Size = New System.Drawing.Size(94, 20)
+            Me.txtApplicationAddr.TabIndex = 15
+            Me.txtApplicationAddr.Text = "0x10000"
+            '
+            'serialPortPanel
+            '
+            Me.serialPortPanel.ColumnCount = 3
+            Me.serialPortPanel.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 100.0!))
+            Me.serialPortPanel.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100.0!))
+            Me.serialPortPanel.ColumnStyles.Add(New System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 100.0!))
+            Me.serialPortPanel.Controls.Add(Me.lblSerialPort, 0, 0)
+            Me.serialPortPanel.Controls.Add(Me.cmbSerialPort, 1, 0)
+            Me.serialPortPanel.Controls.Add(Me.btnRefreshPorts, 2, 0)
+            Me.serialPortPanel.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.serialPortPanel.Location = New System.Drawing.Point(13, 223)
+            Me.serialPortPanel.Name = "serialPortPanel"
+            Me.serialPortPanel.RowStyles.Add(New System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 20.0!))
+            Me.serialPortPanel.Size = New System.Drawing.Size(658, 34)
+            Me.serialPortPanel.TabIndex = 1
+            '
+            'lblSerialPort
+            '
+            Me.lblSerialPort.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.lblSerialPort.Location = New System.Drawing.Point(3, 0)
+            Me.lblSerialPort.Name = "lblSerialPort"
+            Me.lblSerialPort.Size = New System.Drawing.Size(94, 34)
+            Me.lblSerialPort.TabIndex = 0
+            Me.lblSerialPort.Text = "Serial Port:"
+            Me.lblSerialPort.TextAlign = System.Drawing.ContentAlignment.MiddleRight
+            '
+            'cmbSerialPort
+            '
+            Me.cmbSerialPort.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.cmbSerialPort.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList
+            Me.cmbSerialPort.Location = New System.Drawing.Point(103, 3)
+            Me.cmbSerialPort.Name = "cmbSerialPort"
+            Me.cmbSerialPort.Size = New System.Drawing.Size(452, 21)
+            Me.cmbSerialPort.TabIndex = 1
+            '
+            'btnRefreshPorts
+            '
+            Me.btnRefreshPorts.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.btnRefreshPorts.Location = New System.Drawing.Point(561, 3)
+            Me.btnRefreshPorts.Name = "btnRefreshPorts"
+            Me.btnRefreshPorts.Size = New System.Drawing.Size(94, 28)
+            Me.btnRefreshPorts.TabIndex = 2
+            Me.btnRefreshPorts.Text = "Refresh"
+            '
+            'buttonsPanel
+            '
+            Me.buttonsPanel.Controls.Add(Me.btnCancel)
+            Me.buttonsPanel.Controls.Add(Me.btnUpload)
+            Me.buttonsPanel.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.buttonsPanel.FlowDirection = System.Windows.Forms.FlowDirection.RightToLeft
+            Me.buttonsPanel.Location = New System.Drawing.Point(13, 273)
+            Me.buttonsPanel.Name = "buttonsPanel"
+            Me.buttonsPanel.Size = New System.Drawing.Size(658, 34)
+            Me.buttonsPanel.TabIndex = 2
+            Me.buttonsPanel.WrapContents = False
+            '
+            'btnCancel
+            '
+            Me.btnCancel.DialogResult = System.Windows.Forms.DialogResult.Cancel
+            Me.btnCancel.Location = New System.Drawing.Point(553, 5)
+            Me.btnCancel.Margin = New System.Windows.Forms.Padding(5)
+            Me.btnCancel.Name = "btnCancel"
+            Me.btnCancel.Size = New System.Drawing.Size(100, 30)
+            Me.btnCancel.TabIndex = 0
+            Me.btnCancel.Text = "Cancel"
+            '
+            'btnUpload
+            '
+            Me.btnUpload.BackColor = System.Drawing.Color.LightGreen
+            Me.btnUpload.Location = New System.Drawing.Point(443, 5)
+            Me.btnUpload.Margin = New System.Windows.Forms.Padding(5)
+            Me.btnUpload.Name = "btnUpload"
+            Me.btnUpload.Size = New System.Drawing.Size(100, 30)
+            Me.btnUpload.TabIndex = 1
+            Me.btnUpload.Text = "Upload"
+            Me.btnUpload.UseVisualStyleBackColor = False
+            '
+            'progressBar
+            '
+            Me.progressBar.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.progressBar.Location = New System.Drawing.Point(13, 313)
+            Me.progressBar.Name = "progressBar"
+            Me.progressBar.Size = New System.Drawing.Size(658, 24)
+            Me.progressBar.TabIndex = 3
+            '
+            'txtOutput
+            '
+            Me.txtOutput.BackColor = System.Drawing.Color.Black
+            Me.txtOutput.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.txtOutput.Font = New System.Drawing.Font("Consolas", 9.0!)
+            Me.txtOutput.ForeColor = System.Drawing.Color.LightGreen
+            Me.txtOutput.Location = New System.Drawing.Point(13, 343)
+            Me.txtOutput.Name = "txtOutput"
+            Me.txtOutput.ReadOnly = True
+            Me.txtOutput.Size = New System.Drawing.Size(658, 205)
+            Me.txtOutput.TabIndex = 4
+            Me.txtOutput.Text = ""
+            '
+            'lblBootloaderAddr
+            '
+            Me.lblBootloaderAddr.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.lblBootloaderAddr.Location = New System.Drawing.Point(0, 0)
+            Me.lblBootloaderAddr.Name = "lblBootloaderAddr"
+            Me.lblBootloaderAddr.Size = New System.Drawing.Size(100, 23)
+            Me.lblBootloaderAddr.TabIndex = 0
+            Me.lblBootloaderAddr.Text = "Address:"
+            Me.lblBootloaderAddr.TextAlign = System.Drawing.ContentAlignment.MiddleRight
+            '
+            'lblPartitionAddr
+            '
+            Me.lblPartitionAddr.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.lblPartitionAddr.Location = New System.Drawing.Point(0, 0)
+            Me.lblPartitionAddr.Name = "lblPartitionAddr"
+            Me.lblPartitionAddr.Size = New System.Drawing.Size(100, 23)
+            Me.lblPartitionAddr.TabIndex = 0
+            Me.lblPartitionAddr.Text = "Address:"
+            Me.lblPartitionAddr.TextAlign = System.Drawing.ContentAlignment.MiddleRight
+            '
+            'lblBootApp0Addr
+            '
+            Me.lblBootApp0Addr.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.lblBootApp0Addr.Location = New System.Drawing.Point(0, 0)
+            Me.lblBootApp0Addr.Name = "lblBootApp0Addr"
+            Me.lblBootApp0Addr.Size = New System.Drawing.Size(100, 23)
+            Me.lblBootApp0Addr.TabIndex = 0
+            Me.lblBootApp0Addr.Text = "Address:"
+            Me.lblBootApp0Addr.TextAlign = System.Drawing.ContentAlignment.MiddleRight
+            '
+            'lblApplicationAddr
+            '
+            Me.lblApplicationAddr.Dock = System.Windows.Forms.DockStyle.Fill
+            Me.lblApplicationAddr.Location = New System.Drawing.Point(0, 0)
+            Me.lblApplicationAddr.Name = "lblApplicationAddr"
+            Me.lblApplicationAddr.Size = New System.Drawing.Size(100, 23)
+            Me.lblApplicationAddr.TabIndex = 0
+            Me.lblApplicationAddr.Text = "Address:"
+            Me.lblApplicationAddr.TextAlign = System.Drawing.ContentAlignment.MiddleRight
+            '
+            'bgWorker
+            '
+            Me.bgWorker.WorkerReportsProgress = True
+            Me.bgWorker.WorkerSupportsCancellation = True
+            '
+            'BinaryUploadForm
+            '
+            Me.AcceptButton = Me.btnUpload
+            Me.CancelButton = Me.btnCancel
+            Me.ClientSize = New System.Drawing.Size(684, 561)
+            Me.Controls.Add(Me.mainLayout)
+            Me.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog
             Me.MaximizeBox = False
             Me.MinimizeBox = False
+            Me.Name = "BinaryUploadForm"
+            Me.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent
+            Me.Text = "ESP32 Binary Upload"
+            Me.mainLayout.ResumeLayout(False)
+            Me.binaryFilesPanel.ResumeLayout(False)
+            Me.binaryFilesPanel.PerformLayout()
+            Me.serialPortPanel.ResumeLayout(False)
+            Me.buttonsPanel.ResumeLayout(False)
+            Me.ResumeLayout(False)
 
-            ' Main layout
-            Dim mainLayout As New TableLayoutPanel()
-            mainLayout.Dock = DockStyle.Fill
-            mainLayout.RowCount = 7
-            mainLayout.ColumnCount = 1
-            mainLayout.RowStyles.Add(New RowStyle(SizeType.Absolute, 200))  ' Binary files area
-            mainLayout.RowStyles.Add(New RowStyle(SizeType.Absolute, 10))   ' Spacer
-            mainLayout.RowStyles.Add(New RowStyle(SizeType.Absolute, 40))   ' Serial port area
-            mainLayout.RowStyles.Add(New RowStyle(SizeType.Absolute, 10))   ' Spacer
-            mainLayout.RowStyles.Add(New RowStyle(SizeType.Absolute, 40))   ' Buttons area
-            mainLayout.RowStyles.Add(New RowStyle(SizeType.Absolute, 30))   ' Progress bar
-            mainLayout.RowStyles.Add(New RowStyle(SizeType.Percent, 100))   ' Output log
-            mainLayout.Padding = New Padding(10)
-
-            ' Binary files panel
-            Dim binaryFilesPanel As New TableLayoutPanel()
-            binaryFilesPanel.Dock = DockStyle.Fill
-            binaryFilesPanel.RowCount = 4
-            binaryFilesPanel.ColumnCount = 4
-            binaryFilesPanel.RowStyles.Add(New RowStyle(SizeType.Percent, 25))
-            binaryFilesPanel.RowStyles.Add(New RowStyle(SizeType.Percent, 25))
-            binaryFilesPanel.RowStyles.Add(New RowStyle(SizeType.Percent, 25))
-            binaryFilesPanel.RowStyles.Add(New RowStyle(SizeType.Percent, 25))
-            binaryFilesPanel.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 100))
-            binaryFilesPanel.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
-            binaryFilesPanel.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 80))
-            binaryFilesPanel.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 100))
-
-            ' Bootloader row
-            lblBootloader = New Label()
-            lblBootloader.Text = "Bootloader:"
-            lblBootloader.TextAlign = ContentAlignment.MiddleRight
-            lblBootloader.Dock = DockStyle.Fill
-
-            txtBootloaderPath = New TextBox()
-            txtBootloaderPath.Dock = DockStyle.Fill
-
-            btnBrowseBootloader = New Button()
-            btnBrowseBootloader.Text = "Browse..."
-            btnBrowseBootloader.Dock = DockStyle.Fill
-
-            lblBootloaderAddr = New Label()
-            lblBootloaderAddr.Text = "Address:"
-            lblBootloaderAddr.TextAlign = ContentAlignment.MiddleRight
-            lblBootloaderAddr.Dock = DockStyle.Fill
-
-            txtBootloaderAddr = New TextBox()
-            txtBootloaderAddr.Text = "0x1000"
-            txtBootloaderAddr.Width = 80
-            txtBootloaderAddr.Dock = DockStyle.Fill
-
-            binaryFilesPanel.Controls.Add(lblBootloader, 0, 0)
-            binaryFilesPanel.Controls.Add(txtBootloaderPath, 1, 0)
-            binaryFilesPanel.Controls.Add(btnBrowseBootloader, 2, 0)
-            binaryFilesPanel.Controls.Add(txtBootloaderAddr, 3, 0)
-
-            ' Partition table row
-            lblPartition = New Label()
-            lblPartition.Text = "Partition Table:"
-            lblPartition.TextAlign = ContentAlignment.MiddleRight
-            lblPartition.Dock = DockStyle.Fill
-
-            txtPartitionPath = New TextBox()
-            txtPartitionPath.Dock = DockStyle.Fill
-
-            btnBrowsePartition = New Button()
-            btnBrowsePartition.Text = "Browse..."
-            btnBrowsePartition.Dock = DockStyle.Fill
-
-            lblPartitionAddr = New Label()
-            lblPartitionAddr.Text = "Address:"
-            lblPartitionAddr.TextAlign = ContentAlignment.MiddleRight
-            lblPartitionAddr.Dock = DockStyle.Fill
-
-            txtPartitionAddr = New TextBox()
-            txtPartitionAddr.Text = "0x8000"
-            txtPartitionAddr.Width = 80
-            txtPartitionAddr.Dock = DockStyle.Fill
-
-            binaryFilesPanel.Controls.Add(lblPartition, 0, 1)
-            binaryFilesPanel.Controls.Add(txtPartitionPath, 1, 1)
-            binaryFilesPanel.Controls.Add(btnBrowsePartition, 2, 1)
-            binaryFilesPanel.Controls.Add(txtPartitionAddr, 3, 1)
-
-            ' Boot App0 row
-            lblBootApp0 = New Label()
-            lblBootApp0.Text = "Boot App 0:"
-            lblBootApp0.TextAlign = ContentAlignment.MiddleRight
-            lblBootApp0.Dock = DockStyle.Fill
-
-            txtBootApp0Path = New TextBox()
-            txtBootApp0Path.Dock = DockStyle.Fill
-
-            btnBrowseBootApp0 = New Button()
-            btnBrowseBootApp0.Text = "Browse..."
-            btnBrowseBootApp0.Dock = DockStyle.Fill
-
-            lblBootApp0Addr = New Label()
-            lblBootApp0Addr.Text = "Address:"
-            lblBootApp0Addr.TextAlign = ContentAlignment.MiddleRight
-            lblBootApp0Addr.Dock = DockStyle.Fill
-
-            txtBootApp0Addr = New TextBox()
-            txtBootApp0Addr.Text = "0xe000"
-            txtBootApp0Addr.Width = 80
-            txtBootApp0Addr.Dock = DockStyle.Fill
-
-            binaryFilesPanel.Controls.Add(lblBootApp0, 0, 2)
-            binaryFilesPanel.Controls.Add(txtBootApp0Path, 1, 2)
-            binaryFilesPanel.Controls.Add(btnBrowseBootApp0, 2, 2)
-            binaryFilesPanel.Controls.Add(txtBootApp0Addr, 3, 2)
-
-            ' Application row
-            lblApplication = New Label()
-            lblApplication.Text = "Application:"
-            lblApplication.TextAlign = ContentAlignment.MiddleRight
-            lblApplication.Dock = DockStyle.Fill
-
-            txtApplicationPath = New TextBox()
-            txtApplicationPath.Dock = DockStyle.Fill
-
-            btnBrowseApplication = New Button()
-            btnBrowseApplication.Text = "Browse..."
-            btnBrowseApplication.Dock = DockStyle.Fill
-
-            lblApplicationAddr = New Label()
-            lblApplicationAddr.Text = "Address:"
-            lblApplicationAddr.TextAlign = ContentAlignment.MiddleRight
-            lblApplicationAddr.Dock = DockStyle.Fill
-
-            txtApplicationAddr = New TextBox()
-            txtApplicationAddr.Text = "0x10000"
-            txtApplicationAddr.Width = 80
-            txtApplicationAddr.Dock = DockStyle.Fill
-
-            binaryFilesPanel.Controls.Add(lblApplication, 0, 3)
-            binaryFilesPanel.Controls.Add(txtApplicationPath, 1, 3)
-            binaryFilesPanel.Controls.Add(btnBrowseApplication, 2, 3)
-            binaryFilesPanel.Controls.Add(txtApplicationAddr, 3, 3)
-
-            ' Serial port panel
-            Dim serialPortPanel As New TableLayoutPanel()
-            serialPortPanel.Dock = DockStyle.Fill
-            serialPortPanel.ColumnCount = 3
-            serialPortPanel.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 100))
-            serialPortPanel.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 100))
-            serialPortPanel.ColumnStyles.Add(New ColumnStyle(SizeType.Absolute, 100))
-
-            lblSerialPort = New Label()
-            lblSerialPort.Text = "Serial Port:"
-            lblSerialPort.TextAlign = ContentAlignment.MiddleRight
-            lblSerialPort.Dock = DockStyle.Fill
-
-            cmbSerialPort = New ComboBox()
-            cmbSerialPort.DropDownStyle = ComboBoxStyle.DropDownList
-            cmbSerialPort.Dock = DockStyle.Fill
-
-            btnRefreshPorts = New Button()
-            btnRefreshPorts.Text = "Refresh"
-            btnRefreshPorts.Dock = DockStyle.Fill
-
-            serialPortPanel.Controls.Add(lblSerialPort, 0, 0)
-            serialPortPanel.Controls.Add(cmbSerialPort, 1, 0)
-            serialPortPanel.Controls.Add(btnRefreshPorts, 2, 0)
-
-            ' Buttons panel
-            Dim buttonsPanel As New FlowLayoutPanel()
-            buttonsPanel.Dock = DockStyle.Fill
-            buttonsPanel.FlowDirection = FlowDirection.RightToLeft
-            buttonsPanel.WrapContents = False
-
-            btnCancel = New Button()
-            btnCancel.Text = "Cancel"
-            btnCancel.Size = New Size(100, 30)
-            btnCancel.Margin = New Padding(5)
-            btnCancel.DialogResult = DialogResult.Cancel
-
-            btnUpload = New Button()
-            btnUpload.Text = "Upload"
-            btnUpload.Size = New Size(100, 30)
-            btnUpload.Margin = New Padding(5)
-            btnUpload.BackColor = Color.LightGreen
-
-            buttonsPanel.Controls.Add(btnCancel)
-            buttonsPanel.Controls.Add(btnUpload)
-
-            ' Progress Bar
-            progressBar = New ProgressBar()
-            progressBar.Dock = DockStyle.Fill
-            progressBar.Minimum = 0
-            progressBar.Maximum = 100
-            progressBar.Value = 0
-
-            ' Output Text Box
-            txtOutput = New RichTextBox()
-            txtOutput.Dock = DockStyle.Fill
-            txtOutput.ReadOnly = True
-            txtOutput.BackColor = Color.Black
-            txtOutput.ForeColor = Color.LightGreen
-            txtOutput.Font = New Font("Consolas", 9)
-
-            ' Add all panels to main layout
-            mainLayout.Controls.Add(binaryFilesPanel, 0, 0)
-            mainLayout.Controls.Add(serialPortPanel, 0, 2)
-            mainLayout.Controls.Add(buttonsPanel, 0, 4)
-            mainLayout.Controls.Add(progressBar, 0, 5)
-            mainLayout.Controls.Add(txtOutput, 0, 6)
-
-            ' Add main layout to form
-            Me.Controls.Add(mainLayout)
-
-            ' Set up background worker
-            bgWorker = New System.ComponentModel.BackgroundWorker()
-            bgWorker.WorkerReportsProgress = True
-            bgWorker.WorkerSupportsCancellation = True
-
-            ' Wire up events
-            AddHandler btnBrowseBootloader.Click, AddressOf BrowseBootloader_Click
-            AddHandler btnBrowsePartition.Click, AddressOf BrowsePartition_Click
-            AddHandler btnBrowseBootApp0.Click, AddressOf BrowseBootApp0_Click
-            AddHandler btnBrowseApplication.Click, AddressOf BrowseApplication_Click
-            AddHandler btnRefreshPorts.Click, AddressOf RefreshPorts_Click
-            AddHandler btnUpload.Click, AddressOf Upload_Click
-            AddHandler btnCancel.Click, AddressOf Cancel_Click
-            AddHandler bgWorker.DoWork, AddressOf BgWorker_DoWork
-            AddHandler bgWorker.ProgressChanged, AddressOf BgWorker_ProgressChanged
-            AddHandler bgWorker.RunWorkerCompleted, AddressOf BgWorker_RunWorkerCompleted
-            AddHandler Me.FormClosing, AddressOf BinaryUploadForm_FormClosing
-
-            ' Set accept and cancel buttons
-            Me.AcceptButton = btnUpload
-            Me.CancelButton = btnCancel
         End Sub
 
         Private Sub BinaryUploadForm_FormClosing(sender As Object, e As FormClosingEventArgs)
@@ -309,7 +471,7 @@ Namespace KC_LINK_LoaderV1
             CloseSerialPort()
         End Sub
 
-        Private Sub BrowseBootloader_Click(sender As Object, e As EventArgs)
+        Private Sub BrowseBootloader_Click(sender As Object, e As EventArgs) Handles btnBrowseBootloader.Click
             Using openFileDialog As New OpenFileDialog()
                 openFileDialog.Filter = "Binary Files (*.bin)|*.bin|All Files (*.*)|*.*"
                 openFileDialog.Title = "Select Bootloader Binary File"
@@ -320,7 +482,7 @@ Namespace KC_LINK_LoaderV1
             End Using
         End Sub
 
-        Private Sub BrowsePartition_Click(sender As Object, e As EventArgs)
+        Private Sub BrowsePartition_Click(sender As Object, e As EventArgs) Handles btnBrowsePartition.Click
             Using openFileDialog As New OpenFileDialog()
                 openFileDialog.Filter = "Binary Files (*.bin)|*.bin|All Files (*.*)|*.*"
                 openFileDialog.Title = "Select Partition Table Binary File"
@@ -331,7 +493,7 @@ Namespace KC_LINK_LoaderV1
             End Using
         End Sub
 
-        Private Sub BrowseBootApp0_Click(sender As Object, e As EventArgs)
+        Private Sub BrowseBootApp0_Click(sender As Object, e As EventArgs) Handles btnBrowseBootApp0.Click
             Using openFileDialog As New OpenFileDialog()
                 openFileDialog.Filter = "Binary Files (*.bin)|*.bin|All Files (*.*)|*.*"
                 openFileDialog.Title = "Select Boot App 0 Binary File"
@@ -342,7 +504,7 @@ Namespace KC_LINK_LoaderV1
             End Using
         End Sub
 
-        Private Sub BrowseApplication_Click(sender As Object, e As EventArgs)
+        Private Sub BrowseApplication_Click(sender As Object, e As EventArgs) Handles btnBrowseApplication.Click
             Using openFileDialog As New OpenFileDialog()
                 openFileDialog.Filter = "Binary Files (*.bin)|*.bin|All Files (*.*)|*.*"
                 openFileDialog.Title = "Select Application Binary File"
@@ -353,7 +515,7 @@ Namespace KC_LINK_LoaderV1
             End Using
         End Sub
 
-        Private Sub RefreshPorts_Click(sender As Object, e As EventArgs)
+        Private Sub RefreshPorts_Click(sender As Object, e As EventArgs) Handles btnRefreshPorts.Click
             RefreshPortList()
         End Sub
 
@@ -399,10 +561,10 @@ Namespace KC_LINK_LoaderV1
 
         Private Sub LoadDefaultAddresses()
             ' Standard ESP32 flash addresses - updated based on ESP32 documentation
-            txtBootloaderAddr.Text = KC_LINK_LoaderV1.BinaryExporter.DefaultBootloaderAddress    ' 0x1000
-            txtPartitionAddr.Text = KC_LINK_LoaderV1.BinaryExporter.DefaultPartitionAddress      ' 0x8000
-            txtBootApp0Addr.Text = KC_LINK_LoaderV1.BinaryExporter.DefaultBootApp0Address        ' 0xe000
-            txtApplicationAddr.Text = KC_LINK_LoaderV1.BinaryExporter.DefaultApplicationAddress  ' 0x10000
+            txtBootloaderAddr.Text = KC_LINK_LoaderV1._1.BinaryExporter.DefaultBootloaderAddress    ' 0x1000
+            txtPartitionAddr.Text = KC_LINK_LoaderV1._1.BinaryExporter.DefaultPartitionAddress      ' 0x8000
+            txtBootApp0Addr.Text = KC_LINK_LoaderV1._1.BinaryExporter.DefaultBootApp0Address        ' 0xe000
+            txtApplicationAddr.Text = KC_LINK_LoaderV1._1.BinaryExporter.DefaultApplicationAddress  ' 0x10000
 
             AppendToOutput("Using standard ESP32 flash addresses:")
             AppendToOutput("Bootloader: " & txtBootloaderAddr.Text)
@@ -602,7 +764,7 @@ Namespace KC_LINK_LoaderV1
             End Try
         End Function
 
-        Private Sub Upload_Click(sender As Object, e As EventArgs)
+        Private Sub Upload_Click(sender As Object, e As EventArgs) Handles btnUpload.Click
             If cmbSerialPort.SelectedItem Is Nothing Then
                 MessageBox.Show("Please select a serial port for uploading.",
                            "No Serial Port Selected", MessageBoxButtons.OK, MessageBoxIcon.Warning)
@@ -701,7 +863,7 @@ Namespace KC_LINK_LoaderV1
             Return True
         End Function
 
-        Private Sub Cancel_Click(sender As Object, e As EventArgs)
+        Private Sub Cancel_Click(sender As Object, e As EventArgs) Handles btnCancel.Click
             If isUploading AndAlso bgWorker.IsBusy Then
                 bgWorker.CancelAsync()
                 isUploading = False
@@ -713,7 +875,7 @@ Namespace KC_LINK_LoaderV1
             End If
         End Sub
 
-        Private Sub BgWorker_DoWork(sender As Object, e As System.ComponentModel.DoWorkEventArgs)
+        Private Sub BgWorker_DoWork(sender As Object, e As System.ComponentModel.DoWorkEventArgs) Handles bgWorker.DoWork
             Dim worker As System.ComponentModel.BackgroundWorker = CType(sender, System.ComponentModel.BackgroundWorker)
             Dim port As String = CType(e.Argument, String)
             Dim uploadSuccess As Boolean = True
@@ -1031,7 +1193,7 @@ Namespace KC_LINK_LoaderV1
             End Try
         End Sub
 
-        Private Sub BgWorker_ProgressChanged(sender As Object, e As System.ComponentModel.ProgressChangedEventArgs)
+        Private Sub BgWorker_ProgressChanged(sender As Object, e As System.ComponentModel.ProgressChangedEventArgs) Handles bgWorker.ProgressChanged
             ' Update progress bar for percentage changes
             If e.ProgressPercentage > 0 Then
                 progressBar.Value = Math.Min(e.ProgressPercentage, 100)
@@ -1043,7 +1205,7 @@ Namespace KC_LINK_LoaderV1
             End If
         End Sub
 
-        Private Sub BgWorker_RunWorkerCompleted(sender As Object, e As System.ComponentModel.RunWorkerCompletedEventArgs)
+        Private Sub BgWorker_RunWorkerCompleted(sender As Object, e As System.ComponentModel.RunWorkerCompletedEventArgs) Handles bgWorker.RunWorkerCompleted
             ' Reset UI state
             btnUpload.Text = "Upload"
             btnUpload.BackColor = Color.LightGreen
@@ -1084,5 +1246,10 @@ Namespace KC_LINK_LoaderV1
                 txtOutput.ScrollToCaret()
             End If
         End Sub
+
+        Friend WithEvents mainLayout As TableLayoutPanel
+        Friend WithEvents binaryFilesPanel As TableLayoutPanel
+        Friend WithEvents serialPortPanel As TableLayoutPanel
+        Friend WithEvents buttonsPanel As FlowLayoutPanel
     End Class
 End Namespace

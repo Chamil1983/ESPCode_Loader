@@ -3,7 +3,7 @@ Imports System.Drawing
 Imports System.Drawing.Drawing2D
 Imports System.ComponentModel
 
-Namespace KC_LINK_LoaderV1
+Namespace KC_LINK_LoaderV1._1
     Public Class ColoredProgressBar
         Inherits Control
 

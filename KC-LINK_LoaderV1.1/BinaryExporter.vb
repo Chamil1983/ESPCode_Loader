@@ -6,7 +6,7 @@ Imports System.Collections.Generic
 Imports System.Diagnostics
 Imports System.Text.RegularExpressions
 
-Namespace KC_LINK_LoaderV1
+Namespace KC_LINK_LoaderV1._1
     ''' <summary>
     ''' Class to handle exporting of binary files and creating ZIP packages
     ''' </summary>
