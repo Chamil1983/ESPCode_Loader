@@ -6,6 +6,7 @@ Imports System.Diagnostics
 Imports System.Threading
 Imports System.IO.Compression
 
+
 Namespace KC_LINK_LoaderV1
     Public Class ZipUploadForm
         Inherits Form
@@ -14,7 +15,6 @@ Namespace KC_LINK_LoaderV1
         Private WithEvents lblZipFile As Label
         Private WithEvents txtZipPath As TextBox
         Private WithEvents btnBrowseZip As Button
-        Private WithEvents txtBinaryPath As TextBox
 
         Private WithEvents cmbSerialPort As ComboBox
         Private WithEvents lblSerialPort As Label
@@ -27,7 +27,8 @@ Namespace KC_LINK_LoaderV1
 
         Private WithEvents bgWorker As System.ComponentModel.BackgroundWorker
         Private isUploading As Boolean = False
-        Private arduinoCliPath As String = ""
+        Private esptoolPath As String = ""
+        Private esptoolVersion As String = ""
         Private tempDirectory As String = ""
 
         ' Constructor
@@ -35,7 +36,7 @@ Namespace KC_LINK_LoaderV1
             MyBase.New()
             InitializeComponent()
             RefreshPortList()
-            arduinoCliPath = My.Settings.ArduinoCliPath
+            FindEsptoolPath()
         End Sub
 
         Private Sub InitializeComponent()
@@ -77,10 +78,6 @@ Namespace KC_LINK_LoaderV1
             txtZipPath = New TextBox()
             txtZipPath.Dock = DockStyle.Fill
 
-            ' Hidden textbox for binary path (as per requirements)
-            txtBinaryPath = New TextBox()
-            txtBinaryPath.Visible = False
-
             btnBrowseZip = New Button()
             btnBrowseZip.Text = "Browse..."
             btnBrowseZip.Dock = DockStyle.Fill
@@ -88,8 +85,6 @@ Namespace KC_LINK_LoaderV1
             zipFilePanel.Controls.Add(lblZipFile, 0, 0)
             zipFilePanel.Controls.Add(txtZipPath, 1, 0)
             zipFilePanel.Controls.Add(btnBrowseZip, 2, 0)
-            zipFilePanel.Controls.Add(txtBinaryPath, 0, 0)
-            txtBinaryPath.Visible = False
 
             ' Serial port panel
             Dim serialPortPanel As New TableLayoutPanel()
@@ -189,7 +184,6 @@ Namespace KC_LINK_LoaderV1
 
                 If openFileDialog.ShowDialog() = DialogResult.OK Then
                     txtZipPath.Text = openFileDialog.FileName
-                    txtBinaryPath.Text = openFileDialog.FileName  ' Set the hidden binary path field too
                     ValidateZipFile(openFileDialog.FileName)
                 End If
             End Using
@@ -205,7 +199,7 @@ Namespace KC_LINK_LoaderV1
                     For Each entry As ZipArchiveEntry In zipArchive.Entries
                         If entry.FullName.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) Then
                             hasBinFiles = True
-                            AppendToOutput($"- {entry.FullName} ({entry.Length} bytes)")
+                            AppendToOutput("- " & entry.FullName & " (" & entry.Length & " bytes)")
                         End If
                     Next
 
@@ -216,8 +210,8 @@ Namespace KC_LINK_LoaderV1
                     End If
                 End Using
             Catch ex As Exception
-                AppendToOutput($"Error validating zip file: {ex.Message}")
-                MessageBox.Show($"Error validating zip file: {ex.Message}", "Zip Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                AppendToOutput("Error validating zip file: " & ex.Message)
+                MessageBox.Show("Error validating zip file: " & ex.Message, "Zip Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             End Try
         End Sub
 
@@ -235,10 +229,171 @@ Namespace KC_LINK_LoaderV1
 
             If cmbSerialPort.Items.Count > 0 Then
                 cmbSerialPort.SelectedIndex = 0
-                AppendToOutput($"Found {cmbSerialPort.Items.Count} serial ports")
+                AppendToOutput("Found " & cmbSerialPort.Items.Count & " serial ports")
             Else
                 AppendToOutput("No serial ports found")
             End If
+        End Sub
+
+        Private Sub FindEsptoolPath()
+            ' Try to find esptool.py or esptool.exe in common locations
+            esptoolPath = ""
+            esptoolVersion = ""
+
+            ' First check in Arduino ESP32 package (most reliable for ESP32 uploads)
+            Dim esp32PackageDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "arduino15", "packages", "esp32")
+
+            If Directory.Exists(esp32PackageDir) Then
+                Dim esptoolFiles = Directory.GetFiles(esp32PackageDir, "esptool*", SearchOption.AllDirectories)
+                If esptoolFiles.Length > 0 Then
+                    For Each toolPath In esptoolFiles
+                        If toolPath.EndsWith(".exe") OrElse toolPath.EndsWith(".py") Then
+                            ' Found esptool - check version
+                            esptoolPath = toolPath
+                            AppendToOutput("Found ESP32 esptool at: " & esptoolPath)
+
+                            ' Get version info
+                            Try
+                                Dim versionProcess As New Process()
+                                versionProcess.StartInfo.FileName = esptoolPath
+                                versionProcess.StartInfo.Arguments = "version"
+                                versionProcess.StartInfo.UseShellExecute = False
+                                versionProcess.StartInfo.CreateNoWindow = True
+                                versionProcess.StartInfo.RedirectStandardOutput = True
+                                versionProcess.StartInfo.RedirectStandardError = True
+
+                                versionProcess.Start()
+                                Dim versionOutput = versionProcess.StandardOutput.ReadToEnd()
+                                versionProcess.WaitForExit()
+
+                                If versionProcess.ExitCode = 0 Then
+                                    esptoolVersion = versionOutput.Trim()
+                                    AppendToOutput("Esptool version: " & esptoolVersion)
+                                    Return ' Found working esptool
+                                End If
+                            Catch ex As Exception
+                                ' Continue searching
+                                AppendToOutput("Error checking esptool version: " & ex.Message)
+                            End Try
+                        End If
+                    Next
+                End If
+            End If
+
+            ' Look in typical Arduino CLI installation paths
+            Dim arduinoCliPath As String = My.Settings.ArduinoCliPath
+            If Not String.IsNullOrEmpty(arduinoCliPath) Then
+                Dim arduinoDir = Path.GetDirectoryName(arduinoCliPath)
+
+                ' Look for the ESP32 Arduino core
+                Dim possibleEspToolPaths = New String() {
+                    Path.Combine(arduinoDir, "esptool.exe"),
+                    Path.Combine(arduinoDir, "esptool.py"),
+                    Path.Combine(Path.GetDirectoryName(arduinoDir), "hardware", "espressif", "esp32", "tools", "esptool.py"),
+                    Path.Combine(Path.GetDirectoryName(arduinoDir), "hardware", "espressif", "esp32", "tools", "esptool", "esptool.py")
+                }
+
+                For Each toolPath In possibleEspToolPaths
+                    If File.Exists(toolPath) Then
+                        esptoolPath = toolPath
+                        AppendToOutput("Found esptool at: " & esptoolPath)
+                        Return
+                    End If
+                Next
+            End If
+
+            ' If still not found, try to use the Python esptool module
+            Try
+                Dim pythonPath As String = ""
+                Dim pythonProcess As New Process()
+                pythonProcess.StartInfo.FileName = "python"
+                pythonProcess.StartInfo.Arguments = "--version"
+                pythonProcess.StartInfo.UseShellExecute = False
+                pythonProcess.StartInfo.CreateNoWindow = True
+                pythonProcess.StartInfo.RedirectStandardOutput = True
+
+                Try
+                    pythonProcess.Start()
+                    pythonProcess.WaitForExit()
+                    pythonPath = "python"
+                    AppendToOutput("Found Python in PATH")
+                Catch ex As Exception
+                    ' Python not in PATH, try python3
+                    Try
+                        pythonProcess.StartInfo.FileName = "python3"
+                        pythonProcess.Start()
+                        pythonProcess.WaitForExit()
+                        pythonPath = "python3"
+                        AppendToOutput("Found Python3 in PATH")
+                    Catch ex2 As Exception
+                        ' Neither python nor python3 found
+                        AppendToOutput("Python not found in PATH. Please install Python and esptool.")
+                    End Try
+                End Try
+
+                If Not String.IsNullOrEmpty(pythonPath) Then
+                    ' Check if esptool.py is installed
+                    Dim esptoolProcess As New Process()
+                    esptoolProcess.StartInfo.FileName = pythonPath
+                    esptoolProcess.StartInfo.Arguments = "-m esptool version"
+                    esptoolProcess.StartInfo.UseShellExecute = False
+                    esptoolProcess.StartInfo.CreateNoWindow = True
+                    esptoolProcess.StartInfo.RedirectStandardOutput = True
+
+                    Try
+                        esptoolProcess.Start()
+                        Dim output = esptoolProcess.StandardOutput.ReadToEnd()
+                        esptoolProcess.WaitForExit()
+
+                        If esptoolProcess.ExitCode = 0 Then
+                            esptoolPath = pythonPath & " -m esptool"
+                            esptoolVersion = output.Trim()
+                            AppendToOutput("Using esptool.py module: " & esptoolPath)
+                            AppendToOutput("Esptool version: " & esptoolVersion)
+                            Return
+                        End If
+                    Catch ex As Exception
+                        ' esptool.py not installed as module
+                        AppendToOutput("esptool.py module not found")
+                    End Try
+                End If
+            Catch ex As Exception
+                AppendToOutput("Error checking for Python and esptool: " & ex.Message)
+            End Try
+
+            ' Last attempt - try to find in Arduino package directories directly
+            Try
+                Dim packagesDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "arduino15", "packages")
+
+                If Directory.Exists(packagesDir) Then
+                    ' Search for esptool in all packages
+                    Dim esptoolFiles = Directory.GetFiles(packagesDir, "esptool*.exe", SearchOption.AllDirectories)
+                    If esptoolFiles.Length > 0 Then
+                        esptoolPath = esptoolFiles(0)
+                        AppendToOutput("Found esptool in packages: " & esptoolPath)
+                        Return
+                    End If
+
+                    ' Try Python scripts
+                    Dim esptoolPyFiles = Directory.GetFiles(packagesDir, "esptool*.py", SearchOption.AllDirectories)
+                    If esptoolPyFiles.Length > 0 Then
+                        esptoolPath = esptoolPyFiles(0)
+                        AppendToOutput("Found esptool.py in packages: " & esptoolPath)
+                        Return
+                    End If
+                End If
+            Catch ex As Exception
+                AppendToOutput("Error searching package directories: " & ex.Message)
+            End Try
+
+            ' If we get here, no esptool found
+            esptoolPath = ""
+            AppendToOutput("WARNING: Could not find esptool. Upload may fail.")
+            AppendToOutput("Please install esptool via 'pip install esptool' or specify path manually.")
         End Sub
 
         Private Sub Upload_Click(sender As Object, e As EventArgs)
@@ -263,6 +418,21 @@ Namespace KC_LINK_LoaderV1
                 isUploading = False
                 AppendToOutput("Upload cancelled")
             Else
+                ' Check if esptool was found
+                If String.IsNullOrEmpty(esptoolPath) Then
+                    Dim result = MessageBox.Show(
+                        "esptool was not found automatically. Upload may fail." & Environment.NewLine &
+                        "Do you want to continue anyway?" & Environment.NewLine &
+                        "(You may need to install esptool via 'pip install esptool')",
+                        "esptool Not Found",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Warning)
+
+                    If result = DialogResult.No Then
+                        Return
+                    End If
+                End If
+
                 ' Start upload
                 txtOutput.Clear()
                 progressBar.Value = 0
@@ -300,7 +470,7 @@ Namespace KC_LINK_LoaderV1
             tempDirectory = Path.Combine(Path.GetTempPath(), "ESP32Upload_" & Guid.NewGuid().ToString())
             Directory.CreateDirectory(tempDirectory)
 
-            worker.ReportProgress(10, $"Extracting ZIP file to: {tempDirectory}")
+            worker.ReportProgress(10, "Extracting ZIP file to: " & tempDirectory)
 
             Try
                 ' Extract the zip file
@@ -317,7 +487,7 @@ Namespace KC_LINK_LoaderV1
                     Return
                 End If
 
-                worker.ReportProgress(30, $"Found {binFiles.Count} binary files")
+                worker.ReportProgress(30, "Found " & binFiles.Count & " binary files")
 
                 ' Look for specific files by name pattern
                 Dim bootloaderFile As String = binFiles.FirstOrDefault(Function(f) Path.GetFileName(f).ToLower().Contains("bootloader"))
@@ -333,45 +503,154 @@ Namespace KC_LINK_LoaderV1
                     applicationFile = binFiles(0)
                 End If
 
-                ' Default addresses
-                Dim bootloaderAddr As String = "0x1000"
-                Dim partitionAddr As String = "0x8000"
-                Dim bootAppAddr As String = "0xe000"
-                Dim applicationAddr As String = "0x10000"
+                ' Default addresses from BinaryExporter class
+                Dim bootloaderAddr As String = KC_LINK_LoaderV1.BinaryExporter.DefaultBootloaderAddress    ' 0x1000
+                Dim partitionAddr As String = KC_LINK_LoaderV1.BinaryExporter.DefaultPartitionAddress      ' 0x8000
+                Dim bootAppAddr As String = KC_LINK_LoaderV1.BinaryExporter.DefaultBootApp0Address         ' 0xe000
+                Dim applicationAddr As String = KC_LINK_LoaderV1.BinaryExporter.DefaultApplicationAddress  ' 0x10000
 
-                ' Build esptool.py command for flashing
-                Dim command As String = "write_flash --chip esp32 --port " & port & " --baud 460800"
+                worker.ReportProgress(35, "Using standard ESP32 flash addresses:")
+                worker.ReportProgress(35, "Bootloader: " & bootloaderAddr)
+                worker.ReportProgress(35, "Partition Table: " & partitionAddr)
+                worker.ReportProgress(35, "Boot App 0: " & bootAppAddr)
+                worker.ReportProgress(35, "Application: " & applicationAddr)
 
-                ' Add flash options
-                command += " --flash_mode dio --flash_freq 40m --flash_size detect"
+                ' Check for address info in manifest file
+                Dim manifestFile = Directory.GetFiles(tempDirectory, "flash_addresses.txt", SearchOption.AllDirectories).FirstOrDefault()
+                If Not String.IsNullOrEmpty(manifestFile) Then
+                    worker.ReportProgress(40, "Found address manifest file: " & Path.GetFileName(manifestFile))
+                    Try
+                        Dim addressMap As New Dictionary(Of String, String)
+                        Dim lines = File.ReadAllLines(manifestFile)
+                        For Each line In lines
+                            ' Skip comments and empty lines
+                            If line.Trim().StartsWith("#") OrElse String.IsNullOrWhiteSpace(line) Then Continue For
 
-                ' Add flash addresses and files
+                            ' Parse address info (format: filename: address)
+                            Dim parts = line.Split(New Char() {":"c}, 2)
+                            If parts.Length = 2 Then
+                                Dim fileName = parts(0).Trim()
+                                Dim address = parts(1).Trim()
+
+                                addressMap(fileName) = address
+
+                                If fileName.ToLower().Contains("bootloader") Then
+                                    bootloaderAddr = address
+                                    worker.ReportProgress(40, "Using custom bootloader address: " & bootloaderAddr)
+                                ElseIf fileName.ToLower().Contains("partition") Then
+                                    partitionAddr = address
+                                    worker.ReportProgress(40, "Using custom partition address: " & partitionAddr)
+                                ElseIf fileName.ToLower().Contains("boot_app0") Then
+                                    bootAppAddr = address
+                                    worker.ReportProgress(40, "Using custom boot_app0 address: " & bootAppAddr)
+                                ElseIf Not (fileName.ToLower().Contains("bootloader") OrElse
+                                           fileName.ToLower().Contains("partition") OrElse
+                                           fileName.ToLower().Contains("boot_app0") OrElse
+                                           fileName.ToLower().Contains("merged")) Then
+                                    applicationAddr = address
+                                    worker.ReportProgress(40, "Using custom application address: " & applicationAddr)
+                                End If
+                            End If
+                        Next
+
+                        ' Now that we have all addresses in a map, match them to the actual files we found
+                        If Not String.IsNullOrEmpty(bootloaderFile) Then
+                            Dim bootloaderName = Path.GetFileName(bootloaderFile)
+                            If addressMap.ContainsKey(bootloaderName) Then
+                                bootloaderAddr = addressMap(bootloaderName)
+                                worker.ReportProgress(42, "Using exact address for " & bootloaderName & ": " & bootloaderAddr)
+                            End If
+                        End If
+
+                        If Not String.IsNullOrEmpty(partitionFile) Then
+                            Dim partitionName = Path.GetFileName(partitionFile)
+                            If addressMap.ContainsKey(partitionName) Then
+                                partitionAddr = addressMap(partitionName)
+                                worker.ReportProgress(42, "Using exact address for " & partitionName & ": " & partitionAddr)
+                            End If
+                        End If
+
+                        If Not String.IsNullOrEmpty(bootAppFile) Then
+                            Dim bootAppName = Path.GetFileName(bootAppFile)
+                            If addressMap.ContainsKey(bootAppName) Then
+                                bootAppAddr = addressMap(bootAppName)
+                                worker.ReportProgress(42, "Using exact address for " & bootAppName & ": " & bootAppAddr)
+                            End If
+                        End If
+
+                        If Not String.IsNullOrEmpty(applicationFile) Then
+                            Dim appName = Path.GetFileName(applicationFile)
+                            If addressMap.ContainsKey(appName) Then
+                                applicationAddr = addressMap(appName)
+                                worker.ReportProgress(42, "Using exact address for " & appName & ": " & applicationAddr)
+                            End If
+                        End If
+                    Catch ex As Exception
+                        worker.ReportProgress(40, "Error parsing address manifest: " & ex.Message)
+                    End Try
+                End If
+
+                ' Add file list for upload
+                Dim fileList As String = ""
+
                 If Not String.IsNullOrEmpty(bootloaderFile) Then
-                    command += " " & bootloaderAddr & " """ & bootloaderFile & """"
-                    worker.ReportProgress(35, $"Using bootloader: {Path.GetFileName(bootloaderFile)}")
+                    fileList += bootloaderAddr & " """ & bootloaderFile & """ "
+                    worker.ReportProgress(45, "Using bootloader: " & Path.GetFileName(bootloaderFile))
                 End If
 
                 If Not String.IsNullOrEmpty(partitionFile) Then
-                    command += " " & partitionAddr & " """ & partitionFile & """"
-                    worker.ReportProgress(40, $"Using partition table: {Path.GetFileName(partitionFile)}")
+                    fileList += partitionAddr & " """ & partitionFile & """ "
+                    worker.ReportProgress(46, "Using partition table: " & Path.GetFileName(partitionFile))
                 End If
 
                 If Not String.IsNullOrEmpty(bootAppFile) Then
-                    command += " " & bootAppAddr & " """ & bootAppFile & """"
-                    worker.ReportProgress(45, $"Using boot_app0: {Path.GetFileName(bootAppFile)}")
+                    fileList += bootAppAddr & " """ & bootAppFile & """ "
+                    worker.ReportProgress(47, "Using boot_app0: " & Path.GetFileName(bootAppFile))
                 End If
 
                 If Not String.IsNullOrEmpty(applicationFile) Then
-                    command += " " & applicationAddr & " """ & applicationFile & """"
-                    worker.ReportProgress(50, $"Using application: {Path.GetFileName(applicationFile)}")
+                    fileList += applicationAddr & " """ & applicationFile & """"
+                    worker.ReportProgress(48, "Using application: " & Path.GetFileName(applicationFile))
                 End If
 
-                worker.ReportProgress(55, "Command: " & command)
+                worker.ReportProgress(50, "Command: write_flash --chip esp32 --port " & port & " --baud 460800 --flash_mode dio --flash_freq 40m --flash_size detect " & fileList)
 
-                ' Execute the esptool.py command
+                ' Execute the correct esptool command format based on the path
                 Try
-                    Dim processInfo As New ProcessStartInfo(arduinoCliPath)
-                    processInfo.Arguments = "esptool " & command
+                    Dim processInfo As New ProcessStartInfo()
+                    Dim cmdArgs As String = ""
+
+                    ' Check if this is the Arduino ESP32 esptool.exe
+                    If esptoolPath.EndsWith(".exe") Then
+                        ' Standalone executable - don't use --chip parameter with write_flash
+                        processInfo.FileName = esptoolPath
+                        cmdArgs = "--chip esp32 --port " & port & " --baud 460800 write_flash --flash_mode dio --flash_freq 40m --flash_size detect " & fileList
+                        worker.ReportProgress(52, "Using Arduino ESP32 esptool.exe")
+                    ElseIf esptoolPath.Contains(" -m ") Then
+                        ' Python module
+                        Dim parts = esptoolPath.Split(New String() {" -m "}, StringSplitOptions.None)
+                        processInfo.FileName = parts(0) ' python or python3
+                        cmdArgs = "-m esptool --chip esp32 --port " & port & " --baud 460800 write_flash --flash_mode dio --flash_freq 40m --flash_size detect " & fileList
+                        worker.ReportProgress(52, "Using Python esptool.py module")
+                    ElseIf esptoolPath.EndsWith(".py") Then
+                        ' Python script - need to find Python
+                        Try
+                            processInfo.FileName = "python"
+                            cmdArgs = """" & esptoolPath & """ --chip esp32 --port " & port & " --baud 460800 write_flash --flash_mode dio --flash_freq 40m --flash_size detect " & fileList
+                            worker.ReportProgress(52, "Using Python script esptool.py")
+                        Catch ex As Exception
+                            ' Try with python3
+                            processInfo.FileName = "python3"
+                            worker.ReportProgress(52, "Trying with python3 instead of python")
+                        End Try
+                    Else
+                        ' Unknown format - try direct execution
+                        processInfo.FileName = esptoolPath
+                        cmdArgs = "--chip esp32 --port " & port & " --baud 460800 write_flash --flash_mode dio --flash_freq 40m --flash_size detect " & fileList
+                        worker.ReportProgress(52, "Using direct execution of esptool")
+                    End If
+
+                    processInfo.Arguments = cmdArgs
                     processInfo.UseShellExecute = False
                     processInfo.CreateNoWindow = True
                     processInfo.RedirectStandardOutput = True
@@ -408,7 +687,8 @@ Namespace KC_LINK_LoaderV1
                                                               End If
                                                           End Sub
 
-                    worker.ReportProgress(60, "Starting upload process...")
+                    worker.ReportProgress(55, "Starting upload process...")
+                    worker.ReportProgress(56, "Command: " & processInfo.FileName & " " & processInfo.Arguments)
 
                     process.Start()
                     process.BeginOutputReadLine()
@@ -428,6 +708,84 @@ Namespace KC_LINK_LoaderV1
                     If process.ExitCode <> 0 Then
                         worker.ReportProgress(0, "Upload failed with exit code: " & process.ExitCode)
                         uploadSuccess = False
+
+                        ' Try one more time with a different command format as fallback
+                        If uploadSuccess = False Then
+                            worker.ReportProgress(0, "Trying alternative command format...")
+
+                            Dim altProcessInfo As New ProcessStartInfo()
+                            altProcessInfo.FileName = processInfo.FileName
+
+                            ' Swap the parameter order for write_flash
+                            If processInfo.Arguments.Contains("write_flash --flash_mode") Then
+                                ' Move chip/port parameters after write_flash
+                                altProcessInfo.Arguments = "write_flash --chip esp32 --port " & port & " --baud 460800 --flash_mode dio --flash_freq 40m --flash_size detect " & fileList
+                            Else
+                                ' Move flash mode parameters before write_flash
+                                altProcessInfo.Arguments = "--chip esp32 --port " & port & " --baud 460800 write_flash --flash_mode dio --flash_freq 40m --flash_size detect " & fileList
+                            End If
+
+                            worker.ReportProgress(56, "Alternative command: " & altProcessInfo.FileName & " " & altProcessInfo.Arguments)
+
+                            altProcessInfo.UseShellExecute = False
+                            altProcessInfo.CreateNoWindow = True
+                            altProcessInfo.RedirectStandardOutput = True
+                            altProcessInfo.RedirectStandardError = True
+
+                            Dim altProcess As New Process()
+                            altProcess.StartInfo = altProcessInfo
+                            altProcess.EnableRaisingEvents = True
+
+                            ' Setup output handlers
+                            AddHandler altProcess.OutputDataReceived, Sub(s, outputData)
+                                                                          If Not String.IsNullOrEmpty(outputData.Data) Then
+                                                                              worker.ReportProgress(0, outputData.Data)
+
+                                                                              ' Update progress based on output
+                                                                              If outputData.Data.Contains("Writing at") Then
+                                                                                  worker.ReportProgress(60, Nothing)
+                                                                              ElseIf outputData.Data.Contains("Written ") Then
+                                                                                  worker.ReportProgress(70, Nothing)
+                                                                              ElseIf outputData.Data.Contains("Verifying ") Then
+                                                                                  worker.ReportProgress(80, Nothing)
+                                                                              ElseIf outputData.Data.Contains("Hash of data verified") Then
+                                                                                  worker.ReportProgress(90, Nothing)
+                                                                              ElseIf outputData.Data.Contains("Hard resetting") Then
+                                                                                  worker.ReportProgress(95, Nothing)
+                                                                              End If
+                                                                          End If
+                                                                      End Sub
+
+                            AddHandler altProcess.ErrorDataReceived, Sub(s, errorData)
+                                                                         If Not String.IsNullOrEmpty(errorData.Data) Then
+                                                                             worker.ReportProgress(0, "ERROR: " & errorData.Data)
+                                                                         End If
+                                                                     End Sub
+
+                            worker.ReportProgress(55, "Starting alternative upload attempt...")
+
+                            altProcess.Start()
+                            altProcess.BeginOutputReadLine()
+                            altProcess.BeginErrorReadLine()
+
+                            ' Wait for process to exit or cancellation
+                            While Not altProcess.HasExited
+                                If worker.CancellationPending Then
+                                    altProcess.Kill()
+                                    e.Cancel = True
+                                    Return
+                                End If
+                                Thread.Sleep(100)
+                            End While
+
+                            ' Process completed, check exit code
+                            If altProcess.ExitCode = 0 Then
+                                worker.ReportProgress(100, "Alternative upload completed successfully!")
+                                uploadSuccess = True
+                            Else
+                                worker.ReportProgress(0, "Alternative upload failed with exit code: " & altProcess.ExitCode)
+                            End If
+                        End If
                     Else
                         worker.ReportProgress(100, "Upload completed successfully!")
                     End If

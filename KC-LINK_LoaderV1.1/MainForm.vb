@@ -1,4 +1,4 @@
-Imports System
+﻿Imports System
 Imports System.Collections.Generic
 Imports System.ComponentModel
 Imports System.Diagnostics
@@ -10,6 +10,8 @@ Imports System.Text.RegularExpressions
 Imports System.Threading
 Imports System.Threading.Tasks
 Imports System.Windows.Forms
+Imports KC_LINK_LoaderV1
+Imports KC_LINK_LoaderV1._1.KC_LINK_LoaderV1
 
 Public Class MainForm
     Inherits Form
@@ -42,6 +44,9 @@ Public Class MainForm
     Private compilationPhase As String = ""
     Private expectedSteps As Integer = 10  ' ESP32 compilation typically has ~10 steps
     Private currentStep As Integer = 0
+
+    ' Field for build folder path
+    Private buildFolderPath As String = String.Empty
 
 
     ' UI Controls Declaration
@@ -78,6 +83,10 @@ Public Class MainForm
     Private WithEvents btnZipUpload As Button
     Private WithEvents btnBinaryUpload As Button
 
+    ' NEW: Add checkboxes for binary export options
+    Private WithEvents chkExportBinaries As CheckBox
+    Private WithEvents chkCreateZip As CheckBox
+
     ' Menu controls
     Private WithEvents mnuMain As MenuStrip
     Private WithEvents mnuFile As ToolStripMenuItem
@@ -91,9 +100,10 @@ Public Class MainForm
     Private WithEvents mnuBoardSettings As ToolStripMenuItem
     Private WithEvents mnuAbout As ToolStripMenuItem
 
-    ' NEW: Add menu items for zip and binary upload
+    ' NEW: Add menu items for zip and binary upload and binary manager
     Private WithEvents mnuZipUpload As ToolStripMenuItem
     Private WithEvents mnuBinaryUpload As ToolStripMenuItem
+    Private WithEvents mnuBinaryManager As ToolStripMenuItem
 
     Public Sub New()
         ' Initialize components
@@ -127,7 +137,7 @@ Public Class MainForm
         LoadSettings()
 
         ' Log startup info
-        LogMessage($"Application started by Chamil1983 at UTC 2025-08-11 03:04:58")
+        LogMessage($"Application started by Chamil1983 at UTC 2025-08-11 20:47:30")
     End Sub
 
     Private Sub InitializeComponent()
@@ -301,6 +311,23 @@ Public Class MainForm
         actionPanel.Controls.Add(btnBinaryUpload)
         actionPanel.Controls.Add(btnMonitor)
         actionPanel.Controls.Add(btnSettings)
+
+        ' NEW: Create checkboxes for binary export options
+        chkExportBinaries = New CheckBox()
+        chkExportBinaries.Text = "Export Binaries"
+        chkExportBinaries.Checked = True
+        chkExportBinaries.AutoSize = True
+        chkExportBinaries.Margin = New Padding(10, 3, 3, 3)
+
+        chkCreateZip = New CheckBox()
+        chkCreateZip.Text = "Create ZIP"
+        chkCreateZip.Checked = True
+        chkCreateZip.AutoSize = True
+        chkCreateZip.Margin = New Padding(10, 3, 3, 3)
+
+        ' Add checkboxes to the action panel
+        actionPanel.Controls.Add(chkExportBinaries)
+        actionPanel.Controls.Add(chkCreateZip)
 
         ' Add controls to top panel with proper spacing
         topPanel.Controls.Add(lblProject, 0, 0)
@@ -536,7 +563,8 @@ Public Class MainForm
         mnuFile = New ToolStripMenuItem("File")
         mnuOpenProject = New ToolStripMenuItem("Open Project...", Nothing, AddressOf mnuOpenProject_Click)
         mnuRecentProjects = New ToolStripMenuItem("Recent Projects")
-        ' NEW: Add menu items for zip and binary upload
+        ' NEW: Add menu items for zip and binary upload and binary manager
+        mnuBinaryManager = New ToolStripMenuItem("Binary Manager...", Nothing, AddressOf mnuBinaryManager_Click)
         mnuZipUpload = New ToolStripMenuItem("Zip Upload...", Nothing, AddressOf mnuZipUpload_Click)
         mnuBinaryUpload = New ToolStripMenuItem("Binary Upload...", Nothing, AddressOf mnuBinaryUpload_Click)
         mnuExit = New ToolStripMenuItem("Exit", Nothing, AddressOf mnuExit_Click)
@@ -545,6 +573,7 @@ Public Class MainForm
         mnuFile.DropDownItems.Add(mnuOpenProject)
         mnuFile.DropDownItems.Add(mnuRecentProjects)
         mnuFile.DropDownItems.Add(New ToolStripSeparator())
+        mnuFile.DropDownItems.Add(mnuBinaryManager)
         mnuFile.DropDownItems.Add(mnuZipUpload)
         mnuFile.DropDownItems.Add(mnuBinaryUpload)
         mnuFile.DropDownItems.Add(New ToolStripSeparator())
@@ -580,7 +609,7 @@ Public Class MainForm
     End Sub
 
     Private Sub MainForm_Load(sender As Object, e As EventArgs)
-        LogMessage("Application started at 2025-08-11 03:04:58")
+        LogMessage("Application started at 2025-08-11 20:47:30")
         UpdateStatusBar("Checking Arduino CLI configuration...")
         CheckArduinoCLI()
         RefreshPortList()
@@ -646,7 +675,7 @@ Public Class MainForm
 
         ' Default Arduino CLI location
         If String.IsNullOrEmpty(My.Settings.ArduinoCliPath) Then
-            My.Settings.ArduinoCliPath = Path.Combine(Application.StartupPath, "C:\Users\chami\bin\arduino-cli.exe")
+            My.Settings.ArduinoCliPath = Path.Combine(Application.StartupPath, "C:\Users\gen_rms_testroom\Documents\Arduino\Arduino CLI\arduino-cli.exe")
             My.Settings.Save()
         End If
     End Sub
@@ -749,7 +778,7 @@ Public Class MainForm
         Dim configDialog As New BoardConfigDialog(boardConfigManager, cmbBoardType.SelectedItem.ToString())
 
         If configDialog.ShowDialog() = DialogResult.OK Then
-            LogMessage($"[2025-08-11 03:04:58] Board configuration updated by Chamil1983")
+            LogMessage($"[2025-08-11 20:47:30] Board configuration updated by Chamil1983")
             UpdateStatusBar("Board configuration updated")
 
             ' Refresh board list to show any changes
@@ -783,7 +812,7 @@ Public Class MainForm
             My.Settings.LastUsedPartition = selectedPartition
             My.Settings.Save()
 
-            LogMessage($"[2025-08-11 03:04:58] Applied configuration for {selectedBoard} with partition {selectedPartition} by Chamil1983")
+            LogMessage($"[2025-08-11 20:47:30] Applied configuration for {selectedBoard} with partition {selectedPartition} by Chamil1983")
         End If
     End Sub
 
@@ -865,13 +894,13 @@ Public Class MainForm
             End If
         End If
 
-        LogMessage($"[2025-08-11 03:04:58] Selected board: {selectedBoard}, default partition: {defaultPartition}")
+        LogMessage($"[2025-08-11 20:47:30] Selected board: {selectedBoard}, default partition: {defaultPartition}")
         UpdateStatusBar($"Selected board: {selectedBoard}")
     End Sub
 
     Private Sub cmbPartitionOption_SelectedIndexChanged(sender As Object, e As EventArgs)
         Dim selectedPartition = cmbPartitionOption.SelectedItem.ToString()
-        LogMessage($"[2025-08-11 03:04:58] Selected partition scheme: {selectedPartition}")
+        LogMessage($"[2025-08-11 20:47:30] Selected partition scheme: {selectedPartition}")
 
         ' If "custom" is selected, prompt for custom partition file
         If selectedPartition = "custom" Then
@@ -882,7 +911,7 @@ Public Class MainForm
                 If openFileDialog.ShowDialog() = DialogResult.OK Then
                     ' Set custom partition file
                     boardConfigManager.SetCustomPartitionFile(openFileDialog.FileName)
-                    LogMessage("[2025-08-11 03:04:58] Custom partition file selected: " & Path.GetFileName(openFileDialog.FileName))
+                    LogMessage("[2025-08-11 20:47:30] Custom partition file selected: " & Path.GetFileName(openFileDialog.FileName))
                     UpdateStatusBar("Custom partition file loaded")
                 Else
                     ' User cancelled, select default
@@ -1002,7 +1031,7 @@ Public Class MainForm
             ' Start upload in background
             workerThread.RunWorkerAsync("upload")
 
-            LogMessage($"[2025-08-11 03:04:58] Started upload to {cmbSerialPort.SelectedItem.ToString()} by Chamil1983")
+            LogMessage($"[2025-08-11 20:47:30] Started upload to {cmbSerialPort.SelectedItem.ToString()} by Chamil1983")
         End If
     End Sub
 
@@ -1011,7 +1040,6 @@ Public Class MainForm
         ' Open the Zip Upload form
         Dim zipUploadForm As New KC_LINK_LoaderV1.ZipUploadForm()
         zipUploadForm.ShowDialog()
-
     End Sub
 
     ' NEW: Handler for Binary Upload button
@@ -1019,6 +1047,12 @@ Public Class MainForm
         ' Open the Binary Upload form
         Dim binaryUploadForm As New KC_LINK_LoaderV1.BinaryUploadForm()
         binaryUploadForm.ShowDialog()
+    End Sub
+
+    ' NEW: Handler for Binary Manager menu item
+    Private Sub mnuBinaryManager_Click(sender As Object, e As EventArgs)
+        Dim binaryManager As New KC_LINK_LoaderV1.BinaryManagerForm()
+        binaryManager.ShowDialog()
     End Sub
 
     Private Sub SaveBoardSettings()
@@ -1041,7 +1075,7 @@ Public Class MainForm
 
         My.Settings.Save()
 
-        LogMessage($"[2025-08-11 03:04:58] Board settings saved by Chamil1983")
+        LogMessage($"[2025-08-11 20:47:30] Board settings saved by Chamil1983")
     End Sub
 
     Private Sub SaveRecentProject(path As String)
@@ -1110,7 +1144,7 @@ Public Class MainForm
             End If
         Catch ex As Exception
             ' Ignore errors pulsing progress bar
-            Debug.WriteLine($"[2025-08-11 03:04:58] Error pulsing progress bar: {ex.Message}")
+            Debug.WriteLine($"[2025-08-11 20:47:30] Error pulsing progress bar: {ex.Message}")
         End Try
     End Sub
 
@@ -1408,7 +1442,7 @@ Public Class MainForm
                 End If
             Catch ex As Exception
                 ' Ignore errors updating progress UI
-                Debug.WriteLine($"[2025-08-11 03:09:49] Error updating progress: {ex.Message}")
+                Debug.WriteLine($"[2025-08-11 20:51:42] Error updating progress: {ex.Message}")
             End Try
         End If
 
@@ -1483,7 +1517,7 @@ Public Class MainForm
                 lblStatusIndicator.Text = "Success"
                 lblStatusIndicator.ForeColor = Color.Green
                 UpdateStatusBar("Operation completed successfully")
-                LogMessage($"[2025-08-11 03:09:49] Compilation/Upload completed successfully by Chamil1983")
+                LogMessage($"[2025-08-11 20:51:42] Compilation/Upload completed successfully by Chamil1983")
 
                 ' Make sure progress bars are at 100% on success
                 If buildProgressBar.InvokeRequired Then
@@ -1506,16 +1540,88 @@ Public Class MainForm
 
                 ' Flash progress bars to indicate success
                 FlashProgressBarsOnSuccess()
+
+                ' Export binaries if enabled and this was a compilation (not upload)
+                If IsOperationSuccessful() AndAlso Not isUploading Then
+                    ' Only export binaries on successful compilation, not upload
+                    ExportBinariesIfEnabled(Path.GetFileName(projectPath))
+                End If
             Else
                 lblStatusIndicator.Text = "Failed"
                 lblStatusIndicator.ForeColor = Color.Red
                 UpdateStatusBar("Operation failed")
-                LogMessage($"[2025-08-11 03:09:49] Compilation/Upload failed by Chamil1983")
+                LogMessage($"[2025-08-11 20:51:42] Compilation/Upload failed by Chamil1983")
 
                 ' Update statistics UI without animation
                 UpdateStatisticsUI()
             End If
         End If
+    End Sub
+
+    ' NEW: Method to export binaries if enabled
+    Private Sub ExportBinariesIfEnabled(projectNameOrPath As String)
+        If Not chkExportBinaries.Checked Then
+            Return
+        End If
+
+        Try
+            ' Extract project name from path
+            Dim projectName As String = Path.GetFileName(projectNameOrPath)
+
+            ' Extract build path from compilation output
+            buildFolderPath = KC_LINK_LoaderV1.BinaryExporter.ExtractBuildPathFromOutput(compilationOutput)
+
+            If String.IsNullOrEmpty(buildFolderPath) Then
+                AppendToOutput("Could not determine build folder path from compilation output.")
+                Return
+            End If
+
+            ' Set export folder as a subfolder named "export" in the project directory
+            Dim exportPath As String = Path.Combine(projectPath, "export")
+
+            ' Export binaries
+            Dim success As Boolean = KC_LINK_LoaderV1.BinaryExporter.ExportBinaries(
+                buildFolderPath,
+                projectName,
+                exportPath,
+                chkCreateZip.Checked)
+
+            If success Then
+                AppendToOutput("Binaries exported successfully to: " + exportPath)
+
+                ' Get list of exported files
+                Dim exportedFiles As New List(Of String)()
+                For Each filePath In Directory.GetFiles(exportPath, "*.bin")
+                    exportedFiles.Add(filePath)
+                Next
+
+                ' Add manifest file if it exists
+                Dim manifestPath = Path.Combine(exportPath, "flash_addresses.txt")
+                If File.Exists(manifestPath) Then
+                    exportedFiles.Add(manifestPath)
+                End If
+
+                ' Determine ZIP path if it was created
+                Dim zipPath As String = String.Empty
+                If chkCreateZip.Checked Then
+                    zipPath = Path.Combine(exportPath, $"{projectName}_firmware.zip")
+                    AppendToOutput($"Firmware ZIP package created: {zipPath}")
+
+                    If File.Exists(zipPath) Then
+                        exportedFiles.Add(zipPath)
+                    End If
+                End If
+
+                ' Show the export complete dialog
+                Dim dialog As New KC_LINK_LoaderV1.ExportCompleteDialog(exportPath, exportedFiles, zipPath)
+                dialog.ShowDialog()
+            Else
+                AppendToOutput("Failed to export binaries.")
+            End If
+        Catch ex As Exception
+            AppendToOutput($"Error exporting binaries: {ex.Message}")
+            LogMessage($"[2025-08-11 20:51:42] Error exporting binaries: {ex.Message}")
+        End Try
     End Sub
 
     Private Sub AppendToOutput(text As String)
@@ -1541,7 +1647,7 @@ Public Class MainForm
                 hardwareStats.UpdateSketchSize(sketchSize, sketchPercentage)
 
                 ' Log
-                LogMessage($"[2025-08-11 03:09:49] Compiled sketch size: {sketchSize} bytes ({sketchPercentage}%)")
+                LogMessage($"[2025-08-11 20:51:42] Compiled sketch size: {sketchSize} bytes ({sketchPercentage}%)")
             End If
 
             ' Extract RAM usage if available
@@ -1554,10 +1660,10 @@ Public Class MainForm
                 hardwareStats.UpdateRAMUsage(ramSize, ramPercentage)
 
                 ' Log
-                LogMessage($"[2025-08-11 03:09:49] RAM usage: {ramSize} bytes ({ramPercentage}%)")
+                LogMessage($"[2025-08-11 20:51:42] RAM usage: {ramSize} bytes ({ramPercentage}%)")
             End If
         Catch ex As Exception
-            LogMessage($"[2025-08-11 03:09:49] Error parsing compilation statistics: {ex.Message}")
+            LogMessage($"[2025-08-11 20:51:42] Error parsing compilation statistics: {ex.Message}")
         End Try
     End Sub
 
@@ -1613,7 +1719,7 @@ Public Class MainForm
             ramUsageBar.Value = ramPercentage
         End If
 
-        LogMessage($"[2025-08-11 03:09:49] Statistics updated by Chamil1983")
+        LogMessage($"[2025-08-11 20:51:42] Statistics updated by Chamil1983")
     End Sub
 
     ' Method to flash progress bars on successful completion
@@ -1635,7 +1741,7 @@ Public Class MainForm
 
         progressFlashTimer.Start()
 
-        LogMessage($"[2025-08-11 03:09:49] Success animation started by Chamil1983")
+        LogMessage($"[2025-08-11 20:51:42] Success animation started by Chamil1983")
     End Sub
 
     Private Sub StopProgressBarFlashing()
@@ -1651,7 +1757,7 @@ Public Class MainForm
             ramUsageBar.BarColor = DirectCast(originalColors(1), Color)
         End If
 
-        LogMessage($"[2025-08-11 03:09:49] Animation stopped by Chamil1983")
+        LogMessage($"[2025-08-11 20:51:42] Animation stopped by Chamil1983")
     End Sub
 
     Private Sub ProgressFlashTimer_Tick(sender As Object, e As EventArgs)
@@ -1766,9 +1872,9 @@ Public Class MainForm
 
         ' Load Arduino CLI path
         If File.Exists(My.Settings.ArduinoCliPath) Then
-            LogMessage($"[2025-08-11 03:09:49] Using Arduino CLI from: {My.Settings.ArduinoCliPath}")
+            LogMessage($"[2025-08-11 20:51:42] Using Arduino CLI from: {My.Settings.ArduinoCliPath}")
         Else
-            LogMessage($"[2025-08-11 03:09:49] Arduino CLI not found at configured path: {My.Settings.ArduinoCliPath}")
+            LogMessage($"[2025-08-11 20:51:42] Arduino CLI not found at configured path: {My.Settings.ArduinoCliPath}")
 
             ' Try to find arduino-cli in common locations
             Dim possiblePaths As String() = {
@@ -1781,7 +1887,7 @@ Public Class MainForm
                 If File.Exists(path) Then
                     My.Settings.ArduinoCliPath = path
                     My.Settings.Save()
-                    LogMessage($"[2025-08-11 03:09:49] Found Arduino CLI at: {path}")
+                    LogMessage($"[2025-08-11 20:51:42] Found Arduino CLI at: {path}")
                     Exit For
                 End If
             Next
@@ -1790,7 +1896,7 @@ Public Class MainForm
         ' Load boards.txt path
         If Not String.IsNullOrEmpty(My.Settings.BoardsFilePath) AndAlso File.Exists(My.Settings.BoardsFilePath) Then
             boardConfigManager.BoardsFilePath = My.Settings.BoardsFilePath
-            LogMessage($"[2025-08-11 03:09:49] Using boards.txt from: {My.Settings.BoardsFilePath}")
+            LogMessage($"[2025-08-11 20:51:42] Using boards.txt from: {My.Settings.BoardsFilePath}")
         End If
 
         ' Set last used board if available
@@ -1832,7 +1938,7 @@ Public Class MainForm
                     writer.WriteLine(message)
                 End Using
             Catch ex As Exception
-                Debug.WriteLine($"[2025-08-11 03:09:49] Logging error: {ex.Message}")
+                Debug.WriteLine($"[2025-08-11 20:51:42] Logging error: {ex.Message}")
             End Try
         End If
 
@@ -1850,7 +1956,7 @@ Public Class MainForm
         SaveBoardSettings()
 
         ' Log application exit
-        LogMessage($"[2025-08-11 03:09:49] Application exited by Chamil1983")
+        LogMessage($"[2025-08-11 20:51:42] Application exited by Chamil1983")
     End Sub
 
     ' Menu event handlers
@@ -1876,7 +1982,7 @@ Public Class MainForm
                 boardConfigManager.BoardsFilePath = openFileDialog.FileName
 
                 ' Log the change
-                LogMessage($"[2025-08-11 03:09:49] boards.txt path updated to {openFileDialog.FileName} by Chamil1983")
+                LogMessage($"[2025-08-11 20:51:42] boards.txt path updated to {openFileDialog.FileName} by Chamil1983")
 
                 ' Ask if user wants to reload configurations
                 If MessageBox.Show("Would you like to reload board configurations from the selected file?",
@@ -1953,7 +2059,7 @@ Public Class MainForm
             projectPath = path
             txtProjectPath.Text = projectPath
             UpdateProjectInfo()
-            LogMessage($"[2025-08-11 03:09:49] Opened recent project: {path}")
+            LogMessage($"[2025-08-11 20:51:42] Opened recent project: {path}")
         Else
             MessageBox.Show("Project directory no longer exists.", "Project Not Found", MessageBoxButtons.OK, MessageBoxIcon.Warning)
 
@@ -1971,7 +2077,7 @@ Public Class MainForm
             My.Settings.RecentProjects.Clear()
             My.Settings.Save()
             UpdateRecentProjectsMenu()
-            LogMessage($"[2025-08-11 03:09:49] Recent projects list cleared by Chamil1983")
+            LogMessage($"[2025-08-11 20:51:42] Recent projects list cleared by Chamil1983")
         End If
     End Sub
 
@@ -1989,20 +2095,20 @@ End Class
 Public Class ColoredProgressBar
     Inherits Control
 
-    Private _value As Integer = 0
-    Private _maximum As Integer = 100
-    Private _minimum As Integer = 0
-    Private _barColor As Color = Color.RoyalBlue
-    Private _showText As Boolean = True
+    Private m_value As Integer = 0
+    Private m_maximum As Integer = 100
+    Private m_minimum As Integer = 0
+    Private m_barColor As Color = Color.RoyalBlue
+    Private m_showText As Boolean = True
 
     Public Sub New()
         MyBase.New()
         ' Enable double-buffering and other optimizations
         Me.SetStyle(ControlStyles.UserPaint Or
-                   ControlStyles.AllPaintingInWmPaint Or
-                   ControlStyles.OptimizedDoubleBuffer Or
-                   ControlStyles.ResizeRedraw Or
-                   ControlStyles.SupportsTransparentBackColor, True)
+               ControlStyles.AllPaintingInWmPaint Or
+               ControlStyles.OptimizedDoubleBuffer Or
+               ControlStyles.ResizeRedraw Or
+               ControlStyles.SupportsTransparentBackColor, True)
 
         Me.BackColor = SystemColors.Control
         Me.ForeColor = Color.Black
@@ -2013,19 +2119,19 @@ Public Class ColoredProgressBar
     <ComponentModel.DefaultValue(0)>
     Public Property Value As Integer
         Get
-            Return _value
+            Return m_value
         End Get
         Set(value As Integer)
             ' Constrain to min/max
-            If value < _minimum Then
-                value = _minimum
-            ElseIf value > _maximum Then
-                value = _maximum
+            If value < m_minimum Then
+                value = m_minimum
+            ElseIf value > m_maximum Then
+                value = m_maximum
             End If
 
             ' Only invalidate if changed
-            If _value <> value Then
-                _value = value
+            If m_value <> value Then
+                m_value = value
                 Invalidate(False) ' False = only invalidate client area
             End If
         End Set
@@ -2035,14 +2141,14 @@ Public Class ColoredProgressBar
     <ComponentModel.DefaultValue(100)>
     Public Property Maximum As Integer
         Get
-            Return _maximum
+            Return m_maximum
         End Get
         Set(value As Integer)
-            If value < _minimum Then value = _minimum
+            If value < m_minimum Then value = m_minimum
 
-            If _maximum <> value Then
-                _maximum = value
-                If _value > _maximum Then _value = _maximum
+            If m_maximum <> value Then
+                m_maximum = value
+                If m_value > m_maximum Then m_value = m_maximum
                 Invalidate(False)
             End If
         End Set
@@ -2052,14 +2158,14 @@ Public Class ColoredProgressBar
     <ComponentModel.DefaultValue(0)>
     Public Property Minimum As Integer
         Get
-            Return _minimum
+            Return m_minimum
         End Get
         Set(value As Integer)
-            If value > _maximum Then value = _maximum
+            If value > m_maximum Then value = m_maximum
 
-            If _minimum <> value Then
-                _minimum = value
-                If _value < _minimum Then _value = _minimum
+            If m_minimum <> value Then
+                m_minimum = value
+                If m_value < m_minimum Then m_value = m_minimum
                 Invalidate(False)
             End If
         End Set
@@ -2068,11 +2174,11 @@ Public Class ColoredProgressBar
     <ComponentModel.Category("Appearance")>
     Public Property BarColor As Color
         Get
-            Return _barColor
+            Return m_barColor
         End Get
         Set(value As Color)
-            If _barColor <> value Then
-                _barColor = value
+            If m_barColor <> value Then
+                m_barColor = value
                 Invalidate(False)
             End If
         End Set
@@ -2082,11 +2188,11 @@ Public Class ColoredProgressBar
     <ComponentModel.DefaultValue(True)>
     Public Property ShowPercentText As Boolean
         Get
-            Return _showText
+            Return m_showText
         End Get
         Set(value As Boolean)
-            If _showText <> value Then
-                _showText = value
+            If m_showText <> value Then
+                m_showText = value
                 Invalidate(False)
             End If
         End Set
@@ -2108,10 +2214,10 @@ Public Class ColoredProgressBar
         End Using
 
         ' Calculate progress width
-        Dim range As Integer = _maximum - _minimum
+        Dim range As Integer = m_maximum - m_minimum
         If range <= 0 Then range = 1 ' Prevent division by zero
 
-        Dim percentage As Double = CDbl(_value - _minimum) / range
+        Dim percentage As Double = CDbl(m_value - m_minimum) / range
         Dim progressWidth As Integer = CInt(Math.Floor(rect.Width * percentage))
 
         ' Draw progress bar only if there's something to draw
@@ -2121,10 +2227,10 @@ Public Class ColoredProgressBar
 
             ' Draw gradient fill for progress bar
             Using barBrush As New LinearGradientBrush(
-                progressRect,
-                Color.FromArgb(_barColor.R, _barColor.G, _barColor.B, 230),  ' Slightly transparent version
-                _barColor,
-                LinearGradientMode.Vertical)
+            progressRect,
+            Color.FromArgb(m_barColor.R, m_barColor.G, m_barColor.B, 230),  ' Slightly transparent version
+            m_barColor,
+            LinearGradientMode.Vertical)
 
                 g.FillRectangle(barBrush, progressRect)
             End Using
@@ -2147,16 +2253,16 @@ Public Class ColoredProgressBar
         End Using
 
         ' Draw text if enabled
-        If _showText Then
+        If m_showText Then
             Dim percentValue As Integer = CInt(percentage * 100)
             Dim text As String = $"{percentValue}%"
             Dim textSize As SizeF = g.MeasureString(text, Me.Font)
 
             Dim textRect As New RectangleF(
-                (rect.Width - textSize.Width) / 2,
-                (rect.Height - textSize.Height) / 2,
-                textSize.Width,
-                textSize.Height)
+            (rect.Width - textSize.Width) / 2,
+            (rect.Height - textSize.Height) / 2,
+            textSize.Width,
+            textSize.Height)
 
             ' Use a shadow for better readability
             Using shadowBrush As New SolidBrush(Color.FromArgb(80, 0, 0, 0))
