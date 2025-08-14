@@ -625,20 +625,19 @@ Public Class MainForm
         cmbBoardType.Items.Add("KC-Link PRO A8 (Minimal)")
         cmbBoardType.Items.Add("KC-Link PRO A8 (OTA)")
 
-        ' Add standard ESP32 boards
+        ' Add only the specific ESP32 boards requested
         cmbBoardType.Items.Add("ESP32 Dev Module")
+        cmbBoardType.Items.Add("ESP32 Wrover Module")
         cmbBoardType.Items.Add("ESP32 Wrover Kit")
-        cmbBoardType.Items.Add("ESP32 Pico Kit")
+        cmbBoardType.Items.Add("ESP32 PICO-D4")
         cmbBoardType.Items.Add("ESP32-S2 Dev Module")
         cmbBoardType.Items.Add("ESP32-S3 Dev Module")
+        cmbBoardType.Items.Add("ESP32-C2 Dev Module")
         cmbBoardType.Items.Add("ESP32-C3 Dev Module")
-
-        ' Add any custom boards from config
-        For Each boardName In boardConfigManager.GetBoardNames()
-            If Not cmbBoardType.Items.Contains(boardName) Then
-                cmbBoardType.Items.Add(boardName)
-            End If
-        Next
+        cmbBoardType.Items.Add("ESP32-C6 Dev Module")
+        cmbBoardType.Items.Add("ESP32-H2 Dev Module")
+        cmbBoardType.Items.Add("ESP32-C5 Dev Module")
+        cmbBoardType.Items.Add("ESP32-P4 Dev Module")
 
         ' Select first item
         If cmbBoardType.Items.Count > 0 Then
@@ -814,6 +813,7 @@ Public Class MainForm
         End If
     End Sub
 
+
     Private Sub ApplyBoardConfiguration()
         ' Ensure the current board configuration is saved and applied
         If cmbBoardType.SelectedItem IsNot Nothing Then
@@ -825,7 +825,7 @@ Public Class MainForm
             My.Settings.LastUsedPartition = selectedPartition
             My.Settings.Save()
 
-            LogMessage($"[2025-08-12 11:36:18] Applied configuration for {selectedBoard} with partition {selectedPartition} by Chamil1983")
+            LogMessage($"[2025-08-13 12:38:37] Applied configuration for {selectedBoard} with partition {selectedPartition} by Chamil1983")
 
             ' Make sure the FQBN reflects this combination
             Dim fqbn = boardConfigManager.GetFQBN(selectedBoard)
@@ -836,7 +836,7 @@ Public Class MainForm
                 fqbn = boardConfigManager.ApplyCustomPartitionFile(fqbn)
             End If
 
-            LogMessage($"[2025-08-12 11:36:18] Final FQBN for compile/upload: {fqbn}")
+            LogMessage($"[2025-08-13 12:38:37] Final FQBN for compile/upload: {fqbn}")
         End If
     End Sub
 
@@ -852,20 +852,19 @@ Public Class MainForm
         cmbBoardType.Items.Add("KC-Link PRO A8 (Minimal)")
         cmbBoardType.Items.Add("KC-Link PRO A8 (OTA)")
 
-        ' Add standard ESP32 boards
+        ' Add only the specific ESP32 boards requested
         cmbBoardType.Items.Add("ESP32 Dev Module")
+        cmbBoardType.Items.Add("ESP32 Wrover Module")
         cmbBoardType.Items.Add("ESP32 Wrover Kit")
-        cmbBoardType.Items.Add("ESP32 Pico Kit")
+        cmbBoardType.Items.Add("ESP32 PICO-D4")
         cmbBoardType.Items.Add("ESP32-S2 Dev Module")
         cmbBoardType.Items.Add("ESP32-S3 Dev Module")
+        cmbBoardType.Items.Add("ESP32-C2 Dev Module")
         cmbBoardType.Items.Add("ESP32-C3 Dev Module")
-
-        ' Add any custom boards found
-        For Each boardName In boardConfigManager.GetBoardNames()
-            If Not cmbBoardType.Items.Contains(boardName) Then
-                cmbBoardType.Items.Add(boardName)
-            End If
-        Next
+        cmbBoardType.Items.Add("ESP32-C6 Dev Module")
+        cmbBoardType.Items.Add("ESP32-H2 Dev Module")
+        cmbBoardType.Items.Add("ESP32-C5 Dev Module")
+        cmbBoardType.Items.Add("ESP32-P4 Dev Module")
 
         ' Try to restore the previous selection
         Dim index = cmbBoardType.Items.IndexOf(currentSelection)
@@ -1219,16 +1218,33 @@ Public Class MainForm
         ' Get the FQBN and apply the selected partition scheme
         Dim fqbn As String = boardConfigManager.GetFQBN(selectedBoard)
 
-        ' Apply the selected partition scheme - this is the key part for matching settings
+        ' Apply the selected partition scheme
         If selectedPartition <> "default" AndAlso selectedPartition <> "custom" Then
             fqbn = boardConfigManager.ApplyPartitionScheme(fqbn, selectedPartition)
         ElseIf selectedPartition = "custom" Then
             fqbn = boardConfigManager.ApplyCustomPartitionFile(fqbn)
         End If
 
-        worker.ReportProgress(5, $"[2025-08-12 12:55:43] Using FQBN: {fqbn}")
-        worker.ReportProgress(5, $"[2025-08-12 12:55:43] Using partition scheme: {selectedPartition}")
-        worker.ReportProgress(5, $"[2025-08-12 12:55:43] Operation started by Chamil1983")
+        ' Validate that FQBN is compatible with board type
+        Dim boardId = boardConfigManager.GetBoardId(selectedBoard)
+        If (boardId.Contains("esp32s2") OrElse boardId.Contains("esp32s3") OrElse
+        boardId.Contains("esp32c3") OrElse boardId.Contains("esp32c2") OrElse
+        boardId.Contains("esp32c6") OrElse boardId.Contains("esp32h2") OrElse
+        boardId.Contains("esp32c5") OrElse boardId.Contains("esp32p4")) AndAlso
+       fqbn.Contains("FlashFreq=") Then
+            ' Remove FlashFreq parameter for these boards
+            fqbn = Regex.Replace(fqbn, "FlashFreq=[^,]+,?", "")
+            fqbn = fqbn.Replace(",,", ",") ' Clean up double commas
+            fqbn = fqbn.TrimEnd(",") ' Remove trailing comma
+            ' If the FQBN ends with a colon, remove it
+            If fqbn.EndsWith(":") Then
+                fqbn = fqbn.TrimEnd(":")
+            End If
+        End If
+
+        worker.ReportProgress(5, $"[2025-08-13 12:43:21] Using FQBN: {fqbn}")
+        worker.ReportProgress(5, $"[2025-08-13 12:43:21] Using partition scheme: {selectedPartition}")
+        worker.ReportProgress(5, $"[2025-08-13 12:43:21] Operation started by Chamil1983")
 
         Dim arguments As String
         If isUpload Then
@@ -1237,7 +1253,7 @@ Public Class MainForm
             arguments = $"compile -v --fqbn {fqbn} ""{projectPath}"""
         End If
 
-        worker.ReportProgress(5, $"[2025-08-12 12:55:43] Command: {My.Settings.ArduinoCliPath} {arguments}")
+        worker.ReportProgress(5, $"[2025-08-13 12:43:21] Command: {My.Settings.ArduinoCliPath} {arguments}")
 
         Dim process As New Process()
         process.StartInfo.FileName = My.Settings.ArduinoCliPath
@@ -1251,17 +1267,16 @@ Public Class MainForm
 
         ' Use local handlers that check a flag to avoid ReportProgress after completion
         Dim safeReportProgress As Action(Of Integer, Object) =
-    Sub(p, d)
-        If Not worker.CancellationPending AndAlso Not processExited Then
-            Try
-                worker.ReportProgress(p, d)
-            Catch ex As InvalidOperationException
-                ' Ignore, worker may have completed
-            End Try
-        End If
-    End Sub
+        Sub(p, d)
+            If Not worker.CancellationPending AndAlso Not processExited Then
+                Try
+                    worker.ReportProgress(p, d)
+                Catch ex As InvalidOperationException
+                    ' Ignore, worker may have completed
+                End Try
+            End If
+        End Sub
 
-        ' Setup output handlers
         AddHandler process.OutputDataReceived, Sub(s, ea)
                                                    If Not String.IsNullOrEmpty(ea.Data) Then
                                                        compilationOutput &= ea.Data & Environment.NewLine
@@ -1319,7 +1334,7 @@ Public Class MainForm
                 If worker.CancellationPending Then
                     process.Kill()
                     e.Cancel = True
-                    safeReportProgress(0, $"[2025-08-12 12:55:43] Process canceled by Chamil1983")
+                    safeReportProgress(0, $"[2025-08-13 12:43:21] Process canceled by Chamil1983")
                     Exit While
                 End If
 
@@ -1348,7 +1363,7 @@ Public Class MainForm
             If process.ExitCode = 0 Then
                 safeReportProgress(100, If(isUpload, "Upload completed successfully!", "Compilation completed successfully!"))
                 safeReportProgress(100, $"Completed in {duration.TotalSeconds:F1} seconds")
-                safeReportProgress(100, $"[2025-08-12 12:55:43] Operation completed successfully by Chamil1983")
+                safeReportProgress(100, $"[2025-08-13 12:43:21] Operation completed successfully by Chamil1983")
 
                 ' Add to compilation stats
                 hardwareStats.AddCompilation(Path.GetFileName(projectPath), True, duration)
@@ -1360,7 +1375,7 @@ Public Class MainForm
             Else
                 safeReportProgress(0, If(isUpload, "Upload failed with errors", "Compilation failed with errors"))
                 safeReportProgress(0, $"Process exited with code: {process.ExitCode}")
-                safeReportProgress(0, $"[2025-08-12 12:55:43] Operation failed with exit code {process.ExitCode} by Chamil1983")
+                safeReportProgress(0, $"[2025-08-13 12:43:21] Operation failed with exit code {process.ExitCode} by Chamil1983")
 
                 ' Add to compilation stats
                 hardwareStats.AddCompilation(Path.GetFileName(projectPath), False, duration)
@@ -1385,7 +1400,7 @@ Public Class MainForm
         Catch ex As Exception
             processExited = True
             safeReportProgress(0, "Error: " & ex.Message)
-            safeReportProgress(0, $"[2025-08-12 12:55:43] Process error: {ex.Message} by Chamil1983")
+            safeReportProgress(0, $"[2025-08-13 12:43:21] Process error: {ex.Message} by Chamil1983")
             builderExitCode = -1
 
             ' Update UI with error status

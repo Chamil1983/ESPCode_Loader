@@ -60,18 +60,18 @@ Public Class BoardManager
             Try
                 Dim lines As String() = File.ReadAllLines(BoardsFilePath)
 
-                Debug.WriteLine($"[2025-08-12 13:03:54] Loading boards from: {BoardsFilePath}")
+                Debug.WriteLine($"[2025-08-13 12:33:59] Loading boards from: {BoardsFilePath}")
                 ParseBoardsFile(lines)
 
                 ' Log loaded configurations
-                Debug.WriteLine($"[2025-08-12 13:03:54] Loaded {boardConfigurations.Count} board configurations")
+                Debug.WriteLine($"[2025-08-13 12:33:59] Loaded {boardConfigurations.Count} board configurations")
             Catch ex As Exception
                 MessageBox.Show($"Error loading board configurations: {ex.Message}",
                               "Configuration Error", MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                Debug.WriteLine($"[2025-08-12 13:03:54] Error loading boards: {ex.Message}")
+                Debug.WriteLine($"[2025-08-13 12:33:59] Error loading boards: {ex.Message}")
             End Try
         Else
-            Debug.WriteLine($"[2025-08-12 13:03:54] Boards file not found: {BoardsFilePath}")
+            Debug.WriteLine($"[2025-08-13 12:33:59] Boards file not found: {BoardsFilePath}")
         End If
     End Sub
 
@@ -88,10 +88,10 @@ Public Class BoardManager
                         Dim menuKey = parts(0).Trim()
                         Dim menuValue = parts(1).Trim()
                         globalMenus(menuKey) = menuValue
-                        Debug.WriteLine($"[2025-08-12 13:03:54] Found global menu: {menuKey}={menuValue}")
+                        Debug.WriteLine($"[2025-08-13 12:33:59] Found global menu: {menuKey}={menuValue}")
                     End If
                 Catch ex As Exception
-                    Debug.WriteLine($"[2025-08-12 13:03:54] Error parsing global menu: {line}, {ex.Message}")
+                    Debug.WriteLine($"[2025-08-13 12:33:59] Error parsing global menu: {line}, {ex.Message}")
                 End Try
             End If
         Next
@@ -107,20 +107,23 @@ Public Class BoardManager
                         If parts.Length >= 2 Then
                             Dim boardName = parts(1).Trim()
 
-                            ' Add board ID to name mapping
-                            boardIdMap(boardName) = boardId
+                            ' Only add specified board types
+                            If IsValidBoardName(boardName, boardId) Then
+                                ' Add board ID to name mapping
+                                boardIdMap(boardName) = boardId
 
-                            ' Initialize parameter dictionary for this board
-                            boardParameters(boardName) = New Dictionary(Of String, String)()
+                                ' Initialize parameter dictionary for this board
+                                boardParameters(boardName) = New Dictionary(Of String, String)()
 
-                            ' Initialize menu options dictionary for this board
-                            boardMenuOptions(boardName) = New Dictionary(Of String, Dictionary(Of String, String))()
+                                ' Initialize menu options dictionary for this board
+                                boardMenuOptions(boardName) = New Dictionary(Of String, Dictionary(Of String, String))()
 
-                            Debug.WriteLine($"[2025-08-12 13:03:54] Found board: {boardId}={boardName}")
+                                Debug.WriteLine($"[2025-08-13 12:33:59] Found board: {boardId}={boardName}")
+                            End If
                         End If
                     End If
                 Catch ex As Exception
-                    Debug.WriteLine($"[2025-08-12 13:03:54] Error parsing board name: {line}, {ex.Message}")
+                    Debug.WriteLine($"[2025-08-13 12:33:59] Error parsing board name: {line}, {ex.Message}")
                 End Try
             End If
         Next
@@ -169,7 +172,7 @@ Public Class BoardManager
 
                                     ' Add the menu option
                                     menuOptions(menuType)(optionKey) = value
-                                    Debug.WriteLine($"[2025-08-12 13:03:54] Board {boardName} menu option: {menuType}.{optionKey}={value}")
+                                    Debug.WriteLine($"[2025-08-13 12:33:59] Board {boardName} menu option: {menuType}.{optionKey}={value}")
                                 End If
                             End If
 
@@ -177,15 +180,49 @@ Public Class BoardManager
                             parameters(key) = value
                         End If
                     Catch ex As Exception
-                        Debug.WriteLine($"[2025-08-12 13:03:54] Error parsing parameter: {line}, {ex.Message}")
+                        Debug.WriteLine($"[2025-08-13 12:33:59] Error parsing parameter: {line}, {ex.Message}")
                     End Try
                 End If
             Next
 
-            ' Build FQBN with default parameters
+            ' Build FQBN with default parameters based on board type
             BuildBoardFQBN(boardId, boardName, parameters, menuOptions)
         Next
     End Sub
+
+    ' Check if the board name is in our valid list
+    Private Function IsValidBoardName(boardName As String, boardId As String) As Boolean
+        ' List of valid board names to filter
+        Dim validBoards As New List(Of String) From {
+            "ESP32 Dev Module",
+            "ESP32 Wrover Module",
+            "ESP32 Wrover Kit",
+            "ESP32 PICO-D4",
+            "ESP32-S2 Dev Module",
+            "ESP32-S3 Dev Module",
+            "ESP32-C2 Dev Module",
+            "ESP32-C3 Dev Module",
+            "ESP32-C6 Dev Module",
+            "ESP32-H2 Dev Module",
+            "ESP32-C5 Dev Module",
+            "ESP32-P4 Dev Module",
+            "KC-Link PRO A8 (Default)",
+            "KC-Link PRO A8 (Minimal)",
+            "KC-Link PRO A8 (OTA)"
+        }
+
+        ' Special case for Arduino-labeled boards that match our list
+        If boardId.Contains("esp32") Then
+            For Each validBoard In validBoards
+                If boardName.Contains(validBoard) OrElse validBoard.Contains(boardName) Then
+                    Return True
+                End If
+            Next
+        End If
+
+        ' Direct match on valid board names
+        Return validBoards.Contains(boardName)
+    End Function
 
     ' Build FQBN for a board with its default parameters
     Private Sub BuildBoardFQBN(boardId As String, boardName As String, parameters As Dictionary(Of String, String), menuOptions As Dictionary(Of String, Dictionary(Of String, String)))
@@ -244,15 +281,17 @@ Public Class BoardManager
                     End If
 
                 Case "FlashFreq"
-                    ' Check for default flash frequency
-                    If parameters.ContainsKey("build.f_flash") Then
-                        Dim flashFreq = parameters("build.f_flash").Replace("L", "").Replace("UL", "")
-                        If flashFreq.EndsWith("000000") Then
-                            Dim freqMhz = (Long.Parse(flashFreq) / 1000000).ToString()
-                            paramList("FlashFreq") = freqMhz
+                    ' Check for default flash frequency - only add for ESP32 but not S2/S3/C3 variants
+                    If Not boardId.Contains("esp32s2") AndAlso Not boardId.Contains("esp32s3") AndAlso
+                       Not boardId.Contains("esp32c3") AndAlso Not boardId.Contains("esp32c2") AndAlso
+                       Not boardId.Contains("esp32c6") AndAlso Not boardId.Contains("esp32h2") AndAlso
+                       Not boardId.Contains("esp32c5") AndAlso Not boardId.Contains("esp32p4") Then
+                        If parameters.ContainsKey("build.flash_freq") Then
+                            Dim flashFreq = parameters("build.flash_freq")
+                            paramList("FlashFreq") = flashFreq
+                        Else
+                            paramList("FlashFreq") = "80" ' Default
                         End If
-                    Else
-                        paramList("FlashFreq") = "80" ' Default
                     End If
 
                 Case "UploadSpeed"
@@ -284,10 +323,40 @@ Public Class BoardManager
         If Not paramList.ContainsKey("PartitionScheme") Then paramList("PartitionScheme") = "default"
         If Not paramList.ContainsKey("CPUFreq") Then paramList("CPUFreq") = "240"
         If Not paramList.ContainsKey("FlashMode") Then paramList("FlashMode") = "dio"
-        If Not paramList.ContainsKey("FlashFreq") Then paramList("FlashFreq") = "80"
+
+        ' Add FlashFreq only for original ESP32 not for S2/S3/C3 variants
+        If Not boardId.Contains("esp32s2") AndAlso Not boardId.Contains("esp32s3") AndAlso
+           Not boardId.Contains("esp32c3") AndAlso Not boardId.Contains("esp32c2") AndAlso
+           Not boardId.Contains("esp32c6") AndAlso Not boardId.Contains("esp32h2") AndAlso
+           Not boardId.Contains("esp32c5") AndAlso Not boardId.Contains("esp32p4") Then
+            If Not paramList.ContainsKey("FlashFreq") Then paramList("FlashFreq") = "80"
+        End If
+
         If Not paramList.ContainsKey("UploadSpeed") Then paramList("UploadSpeed") = "921600"
         If Not paramList.ContainsKey("DebugLevel") Then paramList("DebugLevel") = "none"
         If Not paramList.ContainsKey("PSRAM") Then paramList("PSRAM") = "disabled"
+
+        ' Add specific parameters for newer boards
+        If boardId.Contains("esp32s3") Then
+            ' ESP32-S3 specific parameters
+            paramList("USBMode") = "hwcdc"
+            paramList("CDCOnBoot") = "default"
+            paramList("MSCOnBoot") = "default"
+            paramList("DFUOnBoot") = "default"
+            paramList("UploadMode") = "default"
+            paramList("FlashSize") = "4M"
+            paramList("LoopCore") = "1"
+            paramList("EventsCore") = "1"
+            paramList("EraseFlash") = "none"
+            paramList("JTAGAdapter") = "default"
+        ElseIf boardId.Contains("esp32s2") Then
+            ' ESP32-S2 specific parameters
+            paramList("USBMode") = "hwcdc"
+            paramList("CDCOnBoot") = "default"
+            paramList("MSCOnBoot") = "default"
+            paramList("DFUOnBoot") = "default"
+            paramList("UploadMode") = "default"
+        End If
 
         ' Build parameter string
         Dim paramStrings As New List(Of String)
@@ -301,7 +370,7 @@ Public Class BoardManager
         ' Add to configurations
         boardConfigurations(boardName) = fqbn
 
-        Debug.WriteLine($"[2025-08-12 13:03:54] Added board: {boardName}, FQBN: {fqbn}")
+        Debug.WriteLine($"[2025-08-13 12:33:59] Added board: {boardName}, FQBN: {fqbn}")
     End Sub
 
     ' Add default ESP32 board configurations
@@ -327,34 +396,65 @@ Public Class BoardManager
 
         ' Standard ESP32 boards - these will be overridden by boards.txt if available
         boardIdMap("ESP32 Dev Module") = "esp32"
+        boardIdMap("ESP32 Wrover Module") = "esp32wrover"
         boardIdMap("ESP32 Wrover Kit") = "esp32wrover"
-        boardIdMap("ESP32 Pico Kit") = "pico32"
+        boardIdMap("ESP32 PICO-D4") = "pico32"
         boardIdMap("ESP32-S2 Dev Module") = "esp32s2"
         boardIdMap("ESP32-S3 Dev Module") = "esp32s3"
+        boardIdMap("ESP32-C2 Dev Module") = "esp32c2"
         boardIdMap("ESP32-C3 Dev Module") = "esp32c3"
+        boardIdMap("ESP32-C6 Dev Module") = "esp32c6"
+        boardIdMap("ESP32-H2 Dev Module") = "esp32h2"
+        boardIdMap("ESP32-C5 Dev Module") = "esp32c5"
+        boardIdMap("ESP32-P4 Dev Module") = "esp32p4"
 
+        ' Standard ESP32 boards - original ESP32
         boardConfigurations("ESP32 Dev Module") = "esp32:esp32:esp32:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80"
+        boardConfigurations("ESP32 Wrover Module") = "esp32:esp32:esp32wrover:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80"
         boardConfigurations("ESP32 Wrover Kit") = "esp32:esp32:esp32wrover:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80"
-        boardConfigurations("ESP32 Pico Kit") = "esp32:esp32:pico32:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80"
-        boardConfigurations("ESP32-S2 Dev Module") = "esp32:esp32:esp32s2:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80"
-        boardConfigurations("ESP32-S3 Dev Module") = "esp32:esp32:esp32s3:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80"
-        boardConfigurations("ESP32-C3 Dev Module") = "esp32:esp32:esp32c3:PartitionScheme=default,CPUFreq=160,FlashMode=dio,FlashFreq=80"
+        boardConfigurations("ESP32 PICO-D4") = "esp32:esp32:pico32:PartitionScheme=default,CPUFreq=240,FlashMode=dio,FlashFreq=80"
+
+        ' ESP32-S2/S3 and newer boards - no FlashFreq parameter
+        boardConfigurations("ESP32-S2 Dev Module") = "esp32:esp32:esp32s2:PartitionScheme=default,CPUFreq=240,FlashMode=dio,USBMode=hwcdc"
+        boardConfigurations("ESP32-S3 Dev Module") = "esp32:esp32:esp32s3:PartitionScheme=default,CPUFreq=240,FlashMode=dio,USBMode=hwcdc"
+        boardConfigurations("ESP32-C2 Dev Module") = "esp32:esp32:esp32c2:PartitionScheme=default,CPUFreq=120,FlashMode=dio"
+        boardConfigurations("ESP32-C3 Dev Module") = "esp32:esp32:esp32c3:PartitionScheme=default,CPUFreq=160,FlashMode=dio"
+        boardConfigurations("ESP32-C6 Dev Module") = "esp32:esp32:esp32c6:PartitionScheme=default,CPUFreq=160,FlashMode=dio"
+        boardConfigurations("ESP32-H2 Dev Module") = "esp32:esp32:esp32h2:PartitionScheme=default,CPUFreq=96,FlashMode=dio"
+        boardConfigurations("ESP32-C5 Dev Module") = "esp32:esp32:esp32c5:PartitionScheme=default,CPUFreq=240,FlashMode=dio"
+        boardConfigurations("ESP32-P4 Dev Module") = "esp32:esp32:esp32p4:PartitionScheme=default,CPUFreq=240,FlashMode=dio"
 
         ' Initialize menu options dictionaries for standard boards
         boardMenuOptions("ESP32 Dev Module") = CreateDefaultMenuOptions()
+        boardMenuOptions("ESP32 Wrover Module") = CreateDefaultMenuOptions()
         boardMenuOptions("ESP32 Wrover Kit") = CreateDefaultMenuOptions()
-        boardMenuOptions("ESP32 Pico Kit") = CreateDefaultMenuOptions()
-        boardMenuOptions("ESP32-S2 Dev Module") = CreateDefaultMenuOptions()
-        boardMenuOptions("ESP32-S3 Dev Module") = CreateDefaultMenuOptions()
-        boardMenuOptions("ESP32-C3 Dev Module") = CreateDefaultMenuOptions()
+        boardMenuOptions("ESP32 PICO-D4") = CreateDefaultMenuOptions()
+
+        ' Special menu options for S2/S3 boards
+        boardMenuOptions("ESP32-S2 Dev Module") = CreateS2MenuOptions()
+        boardMenuOptions("ESP32-S3 Dev Module") = CreateS3MenuOptions()
+        boardMenuOptions("ESP32-C2 Dev Module") = CreateC2MenuOptions()
+        boardMenuOptions("ESP32-C3 Dev Module") = CreateC3MenuOptions()
+        boardMenuOptions("ESP32-C6 Dev Module") = CreateC6MenuOptions()
+        boardMenuOptions("ESP32-H2 Dev Module") = CreateH2MenuOptions()
+        boardMenuOptions("ESP32-C5 Dev Module") = CreateC5MenuOptions()
+        boardMenuOptions("ESP32-P4 Dev Module") = CreateP4MenuOptions()
 
         ' Initialize parameter dictionaries for standard boards
         boardParameters("ESP32 Dev Module") = CreateDefaultBoardParameters()
+        boardParameters("ESP32 Wrover Module") = CreateDefaultBoardParameters()
         boardParameters("ESP32 Wrover Kit") = CreateDefaultBoardParameters()
-        boardParameters("ESP32 Pico Kit") = CreateDefaultBoardParameters()
-        boardParameters("ESP32-S2 Dev Module") = CreateDefaultBoardParameters()
-        boardParameters("ESP32-S3 Dev Module") = CreateDefaultBoardParameters()
-        boardParameters("ESP32-C3 Dev Module") = CreateDefaultBoardParameters()
+        boardParameters("ESP32 PICO-D4") = CreateDefaultBoardParameters()
+
+        ' Special parameters for S2/S3 boards
+        boardParameters("ESP32-S2 Dev Module") = CreateS2BoardParameters()
+        boardParameters("ESP32-S3 Dev Module") = CreateS3BoardParameters()
+        boardParameters("ESP32-C2 Dev Module") = CreateC2BoardParameters()
+        boardParameters("ESP32-C3 Dev Module") = CreateC3BoardParameters()
+        boardParameters("ESP32-C6 Dev Module") = CreateC6BoardParameters()
+        boardParameters("ESP32-H2 Dev Module") = CreateH2BoardParameters()
+        boardParameters("ESP32-C5 Dev Module") = CreateC5BoardParameters()
+        boardParameters("ESP32-P4 Dev Module") = CreateP4BoardParameters()
     End Sub
 
     ' Create default menu options for ESP32 boards
@@ -423,6 +523,167 @@ Public Class BoardManager
         Return menuOptions
     End Function
 
+    ' Create menu options for ESP32-S2 boards
+    Private Function CreateS2MenuOptions() As Dictionary(Of String, Dictionary(Of String, String))
+        Dim menuOptions = CreateDefaultMenuOptions()
+
+        ' Remove FlashFreq as it's not compatible with S2
+        menuOptions.Remove("FlashFreq")
+
+        ' Add S2-specific options
+        Dim usbModeOptions As New Dictionary(Of String, String)
+        usbModeOptions.Add("hwcdc", "Hardware CDC")
+        usbModeOptions.Add("default", "Default")
+        menuOptions.Add("USBMode", usbModeOptions)
+
+        Dim cdcOnBootOptions As New Dictionary(Of String, String)
+        cdcOnBootOptions.Add("default", "Default")
+        cdcOnBootOptions.Add("enabled", "Enabled")
+        cdcOnBootOptions.Add("disabled", "Disabled")
+        menuOptions.Add("CDCOnBoot", cdcOnBootOptions)
+
+        Dim mscOnBootOptions As New Dictionary(Of String, String)
+        mscOnBootOptions.Add("default", "Default")
+        mscOnBootOptions.Add("enabled", "Enabled")
+        mscOnBootOptions.Add("disabled", "Disabled")
+        menuOptions.Add("MSCOnBoot", mscOnBootOptions)
+
+        Dim dfuOnBootOptions As New Dictionary(Of String, String)
+        dfuOnBootOptions.Add("default", "Default")
+        dfuOnBootOptions.Add("enabled", "Enabled")
+        dfuOnBootOptions.Add("disabled", "Disabled")
+        menuOptions.Add("DFUOnBoot", dfuOnBootOptions)
+
+        Dim uploadModeOptions As New Dictionary(Of String, String)
+        uploadModeOptions.Add("default", "Default")
+        uploadModeOptions.Add("usb", "USB")
+        uploadModeOptions.Add("uart", "UART")
+        menuOptions.Add("UploadMode", uploadModeOptions)
+
+        Return menuOptions
+    End Function
+
+    ' Create menu options for ESP32-S3 boards
+    Private Function CreateS3MenuOptions() As Dictionary(Of String, Dictionary(Of String, String))
+        Dim menuOptions = CreateS2MenuOptions()  ' S3 has all the S2 options plus some extras
+
+        ' Add S3-specific options
+        Dim flashSizeOptions As New Dictionary(Of String, String)
+        flashSizeOptions.Add("4M", "4MB")
+        flashSizeOptions.Add("8M", "8MB")
+        flashSizeOptions.Add("16M", "16MB")
+        flashSizeOptions.Add("32M", "32MB")
+        menuOptions.Add("FlashSize", flashSizeOptions)
+
+        Dim loopCoreOptions As New Dictionary(Of String, String)
+        loopCoreOptions.Add("1", "Core 1")
+        loopCoreOptions.Add("0", "Core 0")
+        menuOptions.Add("LoopCore", loopCoreOptions)
+
+        Dim eventsCoreOptions As New Dictionary(Of String, String)
+        eventsCoreOptions.Add("1", "Core 1")
+        eventsCoreOptions.Add("0", "Core 0")
+        menuOptions.Add("EventsCore", eventsCoreOptions)
+
+        Dim eraseFlashOptions As New Dictionary(Of String, String)
+        eraseFlashOptions.Add("none", "None")
+        eraseFlashOptions.Add("all", "All")
+        menuOptions.Add("EraseFlash", eraseFlashOptions)
+
+        Dim jtagAdapterOptions As New Dictionary(Of String, String)
+        jtagAdapterOptions.Add("default", "Default")
+        jtagAdapterOptions.Add("custom", "Custom")
+        menuOptions.Add("JTAGAdapter", jtagAdapterOptions)
+
+        Return menuOptions
+    End Function
+
+    ' Create menu options for ESP32-C2 boards
+    Private Function CreateC2MenuOptions() As Dictionary(Of String, Dictionary(Of String, String))
+        Dim menuOptions = CreateDefaultMenuOptions()
+
+        ' Remove FlashFreq as it's not compatible with C2
+        menuOptions.Remove("FlashFreq")
+
+        ' Modify CPU frequencies for C2
+        Dim cpuFreqOptions As New Dictionary(Of String, String)
+        cpuFreqOptions.Add("120", "120MHz")
+        cpuFreqOptions.Add("96", "96MHz")
+        cpuFreqOptions.Add("80", "80MHz")
+        cpuFreqOptions.Add("60", "60MHz")
+        cpuFreqOptions.Add("48", "48MHz")
+        cpuFreqOptions.Add("40", "40MHz")
+        cpuFreqOptions.Add("26", "26MHz")
+        cpuFreqOptions.Add("20", "20MHz")
+        cpuFreqOptions.Add("10", "10MHz")
+        menuOptions("CPUFreq") = cpuFreqOptions
+
+        Return menuOptions
+    End Function
+
+    ' Create menu options for ESP32-C3 boards
+    Private Function CreateC3MenuOptions() As Dictionary(Of String, Dictionary(Of String, String))
+        Dim menuOptions = CreateDefaultMenuOptions()
+
+        ' Remove FlashFreq as it's not compatible with C3
+        menuOptions.Remove("FlashFreq")
+
+        ' Modify CPU frequencies for C3
+        Dim cpuFreqOptions As New Dictionary(Of String, String)
+        cpuFreqOptions.Add("160", "160MHz")
+        cpuFreqOptions.Add("80", "80MHz")
+        cpuFreqOptions.Add("40", "40MHz")
+        cpuFreqOptions.Add("20", "20MHz")
+        cpuFreqOptions.Add("10", "10MHz")
+        menuOptions("CPUFreq") = cpuFreqOptions
+
+        Return menuOptions
+    End Function
+
+    ' Create menu options for ESP32-C6 boards
+    Private Function CreateC6MenuOptions() As Dictionary(Of String, Dictionary(Of String, String))
+        Return CreateC3MenuOptions()  ' Similar options to C3
+    End Function
+
+    ' Create menu options for ESP32-H2 boards
+    Private Function CreateH2MenuOptions() As Dictionary(Of String, Dictionary(Of String, String))
+        Dim menuOptions = CreateDefaultMenuOptions()
+
+        ' Remove FlashFreq as it's not compatible with H2
+        menuOptions.Remove("FlashFreq")
+
+        ' Modify CPU frequencies for H2
+        Dim cpuFreqOptions As New Dictionary(Of String, String)
+        cpuFreqOptions.Add("96", "96MHz")
+        cpuFreqOptions.Add("48", "48MHz")
+        cpuFreqOptions.Add("32", "32MHz")
+        cpuFreqOptions.Add("16", "16MHz")
+        cpuFreqOptions.Add("8", "8MHz")
+        menuOptions("CPUFreq") = cpuFreqOptions
+
+        Return menuOptions
+    End Function
+
+    ' Create menu options for ESP32-C5 boards
+    Private Function CreateC5MenuOptions() As Dictionary(Of String, Dictionary(Of String, String))
+        Dim menuOptions = CreateDefaultMenuOptions()
+
+        ' Remove FlashFreq as it's not compatible with C5
+        menuOptions.Remove("FlashFreq")
+
+        Return menuOptions
+    End Function
+
+    ' Create menu options for ESP32-P4 boards
+    Private Function CreateP4MenuOptions() As Dictionary(Of String, Dictionary(Of String, String))
+        Dim menuOptions = CreateDefaultMenuOptions()
+
+        ' Remove FlashFreq as it's not compatible with P4
+        menuOptions.Remove("FlashFreq")
+
+        Return menuOptions
+    End Function
+
     ' Create default parameters for a board
     Private Function CreateDefaultBoardParameters() As Dictionary(Of String, String)
         Dim parameters As New Dictionary(Of String, String)()
@@ -478,6 +739,190 @@ Public Class BoardManager
         Return parameters
     End Function
 
+    ' Create parameters for ESP32-S2 boards
+    Private Function CreateS2BoardParameters() As Dictionary(Of String, String)
+        Dim parameters = CreateDefaultBoardParameters()
+
+        ' Remove Flash Frequency as it's not compatible with S2
+        parameters.Remove("menu.FlashFreq")
+        parameters.Remove("menu.FlashFreq.80")
+        parameters.Remove("menu.FlashFreq.40")
+        parameters.Remove("menu.FlashFreq.20")
+
+        ' Add S2-specific parameters
+        parameters("menu.USBMode") = "USB Mode"
+        parameters("menu.USBMode.hwcdc") = "Hardware CDC"
+        parameters("menu.USBMode.default") = "Default"
+
+        parameters("menu.CDCOnBoot") = "CDC On Boot"
+        parameters("menu.CDCOnBoot.default") = "Default"
+        parameters("menu.CDCOnBoot.enabled") = "Enabled"
+        parameters("menu.CDCOnBoot.disabled") = "Disabled"
+
+        parameters("menu.MSCOnBoot") = "MSC On Boot"
+        parameters("menu.MSCOnBoot.default") = "Default"
+        parameters("menu.MSCOnBoot.enabled") = "Enabled"
+        parameters("menu.MSCOnBoot.disabled") = "Disabled"
+
+        parameters("menu.DFUOnBoot") = "DFU On Boot"
+        parameters("menu.DFUOnBoot.default") = "Default"
+        parameters("menu.DFUOnBoot.enabled") = "Enabled"
+        parameters("menu.DFUOnBoot.disabled") = "Disabled"
+
+        parameters("menu.UploadMode") = "Upload Mode"
+        parameters("menu.UploadMode.default") = "Default"
+        parameters("menu.UploadMode.usb") = "USB"
+        parameters("menu.UploadMode.uart") = "UART"
+
+        Return parameters
+    End Function
+
+    ' Create parameters for ESP32-S3 boards
+    Private Function CreateS3BoardParameters() As Dictionary(Of String, String)
+        Dim parameters = CreateS2BoardParameters()  ' S3 has all the S2 parameters plus some extras
+
+        ' Add S3-specific parameters
+        parameters("menu.FlashSize") = "Flash Size"
+        parameters("menu.FlashSize.4M") = "4MB"
+        parameters("menu.FlashSize.8M") = "8MB"
+        parameters("menu.FlashSize.16M") = "16MB"
+        parameters("menu.FlashSize.32M") = "32MB"
+
+        parameters("menu.LoopCore") = "Arduino Loop Core"
+        parameters("menu.LoopCore.1") = "Core 1"
+        parameters("menu.LoopCore.0") = "Core 0"
+
+        parameters("menu.EventsCore") = "Events Run On Core"
+        parameters("menu.EventsCore.1") = "Core 1"
+        parameters("menu.EventsCore.0") = "Core 0"
+
+        parameters("menu.EraseFlash") = "Erase Flash"
+        parameters("menu.EraseFlash.none") = "None"
+        parameters("menu.EraseFlash.all") = "All"
+
+        parameters("menu.JTAGAdapter") = "JTAG Adapter"
+        parameters("menu.JTAGAdapter.default") = "Default"
+        parameters("menu.JTAGAdapter.custom") = "Custom"
+
+        Return parameters
+    End Function
+
+    ' Create parameters for ESP32-C2 boards
+    Private Function CreateC2BoardParameters() As Dictionary(Of String, String)
+        Dim parameters = CreateDefaultBoardParameters()
+
+        ' Remove Flash Frequency as it's not compatible with C2
+        parameters.Remove("menu.FlashFreq")
+        parameters.Remove("menu.FlashFreq.80")
+        parameters.Remove("menu.FlashFreq.40")
+        parameters.Remove("menu.FlashFreq.20")
+
+        ' Replace CPU Frequencies for C2
+        parameters.Remove("menu.CPUFreq.240")
+        parameters.Remove("menu.CPUFreq.160")
+        parameters.Remove("menu.CPUFreq.80")
+        parameters.Remove("menu.CPUFreq.40")
+        parameters.Remove("menu.CPUFreq.20")
+        parameters.Remove("menu.CPUFreq.10")
+
+        parameters("menu.CPUFreq.120") = "120MHz"
+        parameters("menu.CPUFreq.96") = "96MHz"
+        parameters("menu.CPUFreq.80") = "80MHz"
+        parameters("menu.CPUFreq.60") = "60MHz"
+        parameters("menu.CPUFreq.48") = "48MHz"
+        parameters("menu.CPUFreq.40") = "40MHz"
+        parameters("menu.CPUFreq.26") = "26MHz"
+        parameters("menu.CPUFreq.20") = "20MHz"
+        parameters("menu.CPUFreq.10") = "10MHz"
+
+        Return parameters
+    End Function
+
+    ' Create parameters for ESP32-C3 boards
+    Private Function CreateC3BoardParameters() As Dictionary(Of String, String)
+        Dim parameters = CreateDefaultBoardParameters()
+
+        ' Remove Flash Frequency as it's not compatible with C3
+        parameters.Remove("menu.FlashFreq")
+        parameters.Remove("menu.FlashFreq.80")
+        parameters.Remove("menu.FlashFreq.40")
+        parameters.Remove("menu.FlashFreq.20")
+
+        ' Replace CPU Frequencies for C3
+        parameters.Remove("menu.CPUFreq.240")
+        parameters.Remove("menu.CPUFreq.160")
+        parameters.Remove("menu.CPUFreq.80")
+        parameters.Remove("menu.CPUFreq.40")
+        parameters.Remove("menu.CPUFreq.20")
+        parameters.Remove("menu.CPUFreq.10")
+
+        parameters("menu.CPUFreq.160") = "160MHz"
+        parameters("menu.CPUFreq.80") = "80MHz"
+        parameters("menu.CPUFreq.40") = "40MHz"
+        parameters("menu.CPUFreq.20") = "20MHz"
+        parameters("menu.CPUFreq.10") = "10MHz"
+
+        Return parameters
+    End Function
+
+    ' Create parameters for ESP32-C6 boards
+    Private Function CreateC6BoardParameters() As Dictionary(Of String, String)
+        Return CreateC3BoardParameters()  ' Similar parameters to C3
+    End Function
+
+    ' Create parameters for ESP32-H2 boards
+    Private Function CreateH2BoardParameters() As Dictionary(Of String, String)
+        Dim parameters = CreateDefaultBoardParameters()
+
+        ' Remove Flash Frequency as it's not compatible with H2
+        parameters.Remove("menu.FlashFreq")
+        parameters.Remove("menu.FlashFreq.80")
+        parameters.Remove("menu.FlashFreq.40")
+        parameters.Remove("menu.FlashFreq.20")
+
+        ' Replace CPU Frequencies for H2
+        parameters.Remove("menu.CPUFreq.240")
+        parameters.Remove("menu.CPUFreq.160")
+        parameters.Remove("menu.CPUFreq.80")
+        parameters.Remove("menu.CPUFreq.40")
+        parameters.Remove("menu.CPUFreq.20")
+        parameters.Remove("menu.CPUFreq.10")
+
+        parameters("menu.CPUFreq.96") = "96MHz"
+        parameters("menu.CPUFreq.48") = "48MHz"
+        parameters("menu.CPUFreq.32") = "32MHz"
+        parameters("menu.CPUFreq.16") = "16MHz"
+        parameters("menu.CPUFreq.8") = "8MHz"
+
+        Return parameters
+    End Function
+
+    ' Create parameters for ESP32-C5 boards
+    Private Function CreateC5BoardParameters() As Dictionary(Of String, String)
+        Dim parameters = CreateDefaultBoardParameters()
+
+        ' Remove Flash Frequency as it's not compatible with C5
+        parameters.Remove("menu.FlashFreq")
+        parameters.Remove("menu.FlashFreq.80")
+        parameters.Remove("menu.FlashFreq.40")
+        parameters.Remove("menu.FlashFreq.20")
+
+        Return parameters
+    End Function
+
+    ' Create parameters for ESP32-P4 boards
+    Private Function CreateP4BoardParameters() As Dictionary(Of String, String)
+        Dim parameters = CreateDefaultBoardParameters()
+
+        ' Remove Flash Frequency as it's not compatible with P4
+        parameters.Remove("menu.FlashFreq")
+        parameters.Remove("menu.FlashFreq.80")
+        parameters.Remove("menu.FlashFreq.40")
+        parameters.Remove("menu.FlashFreq.20")
+
+        Return parameters
+    End Function
+
     Public Function GetFQBN(boardName As String) As String
         ' Return the FQBN for the given board name
         If boardConfigurations.ContainsKey(boardName) Then
@@ -526,6 +971,18 @@ Public Class BoardManager
     Public Function GetParameterOptions(boardName As String, paramName As String) As Dictionary(Of String, String)
         Dim result As New Dictionary(Of String, String)()
 
+        ' Check if this is an S2/S3/C3 board and if trying to access FlashFreq
+        If paramName = "FlashFreq" Then
+            Dim boardId = GetBoardId(boardName)
+            If boardId.Contains("esp32s2") OrElse boardId.Contains("esp32s3") OrElse
+               boardId.Contains("esp32c3") OrElse boardId.Contains("esp32c2") OrElse
+               boardId.Contains("esp32c6") OrElse boardId.Contains("esp32h2") OrElse
+               boardId.Contains("esp32c5") OrElse boardId.Contains("esp32p4") Then
+                ' These boards don't support FlashFreq option
+                Return result
+            End If
+        End If
+
         ' First check if we have menu options for this board and parameter
         If boardMenuOptions.ContainsKey(boardName) AndAlso boardMenuOptions(boardName).ContainsKey(paramName) Then
             ' Return the menu options for this parameter
@@ -550,21 +1007,46 @@ Public Class BoardManager
         If result.Count = 0 Then
             Select Case paramName
                 Case "CPUFreq"
-                    result.Add("240", "240MHz")
-                    result.Add("160", "160MHz")
-                    result.Add("80", "80MHz")
-                    result.Add("40", "40MHz")
-                    result.Add("20", "20MHz")
-                    result.Add("10", "10MHz")
+                    ' Check board type for appropriate CPU frequencies
+                    Dim boardId = GetBoardId(boardName)
+                    If boardId.Contains("esp32c2") Then
+                        result.Add("120", "120MHz")
+                        result.Add("96", "96MHz")
+                        result.Add("80", "80MHz")
+                        result.Add("60", "60MHz")
+                    ElseIf boardId.Contains("esp32c3") OrElse boardId.Contains("esp32c6") Then
+                        result.Add("160", "160MHz")
+                        result.Add("80", "80MHz")
+                        result.Add("40", "40MHz")
+                    ElseIf boardId.Contains("esp32h2") Then
+                        result.Add("96", "96MHz")
+                        result.Add("48", "48MHz")
+                        result.Add("32", "32MHz")
+                        result.Add("16", "16MHz")
+                    Else
+                        result.Add("240", "240MHz")
+                        result.Add("160", "160MHz")
+                        result.Add("80", "80MHz")
+                        result.Add("40", "40MHz")
+                        result.Add("20", "20MHz")
+                        result.Add("10", "10MHz")
+                    End If
                 Case "FlashMode"
                     result.Add("qio", "QIO")
                     result.Add("dio", "DIO")
                     result.Add("qout", "QOUT")
                     result.Add("dout", "DOUT")
                 Case "FlashFreq"
-                    result.Add("80", "80MHz")
-                    result.Add("40", "40MHz")
-                    result.Add("20", "20MHz")
+                    ' Only add if this is a compatible board
+                    Dim boardId = GetBoardId(boardName)
+                    If Not boardId.Contains("esp32s2") AndAlso Not boardId.Contains("esp32s3") AndAlso
+                       Not boardId.Contains("esp32c3") AndAlso Not boardId.Contains("esp32c2") AndAlso
+                       Not boardId.Contains("esp32c6") AndAlso Not boardId.Contains("esp32h2") AndAlso
+                       Not boardId.Contains("esp32c5") AndAlso Not boardId.Contains("esp32p4") Then
+                        result.Add("80", "80MHz")
+                        result.Add("40", "40MHz")
+                        result.Add("20", "20MHz")
+                    End If
                 Case "PartitionScheme"
                     result.Add("default", "Default")
                     result.Add("min_spiffs", "Minimal SPIFFS")
@@ -587,6 +1069,33 @@ Public Class BoardManager
                 Case "PSRAM"
                     result.Add("disabled", "Disabled")
                     result.Add("enabled", "Enabled")
+                ' ESP32-S2/S3 specific options
+                Case "USBMode"
+                    result.Add("hwcdc", "Hardware CDC")
+                    result.Add("default", "Default")
+                Case "CDCOnBoot", "MSCOnBoot", "DFUOnBoot"
+                    result.Add("default", "Default")
+                    result.Add("enabled", "Enabled")
+                    result.Add("disabled", "Disabled")
+                Case "UploadMode"
+                    result.Add("default", "Default")
+                    result.Add("usb", "USB")
+                    result.Add("uart", "UART")
+                ' ESP32-S3 specific options
+                Case "FlashSize"
+                    result.Add("4M", "4MB")
+                    result.Add("8M", "8MB")
+                    result.Add("16M", "16MB")
+                    result.Add("32M", "32MB")
+                Case "LoopCore", "EventsCore"
+                    result.Add("1", "Core 1")
+                    result.Add("0", "Core 0")
+                Case "EraseFlash"
+                    result.Add("none", "None")
+                    result.Add("all", "All")
+                Case "JTAGAdapter"
+                    result.Add("default", "Default")
+                    result.Add("custom", "Custom")
             End Select
         End If
 
@@ -671,11 +1180,11 @@ Public Class BoardManager
                 File.Copy(filePath, destFile, True)
 
                 ' Log success
-                Debug.WriteLine($"[2025-08-12 13:03:54] Custom partition file copied to {destFile}")
+                Debug.WriteLine($"[2025-08-13 12:33:59] Custom partition file copied to {destFile}")
             End If
         Catch ex As Exception
             ' Log error but continue
-            Debug.WriteLine($"[2025-08-12 13:03:54] Error copying custom partition file: {ex.Message}")
+            Debug.WriteLine($"[2025-08-13 12:33:59] Error copying custom partition file: {ex.Message}")
         End Try
     End Sub
 
@@ -722,6 +1231,16 @@ Public Class BoardManager
                 Dim vendor = parts(0)
                 Dim architecture = parts(1)
 
+                ' Check if this is an S2/S3/C3 board and remove FlashFreq if present
+                Dim isNewBoard = boardId.Contains("esp32s2") OrElse boardId.Contains("esp32s3") OrElse
+                                boardId.Contains("esp32c3") OrElse boardId.Contains("esp32c2") OrElse
+                                boardId.Contains("esp32c6") OrElse boardId.Contains("esp32h2") OrElse
+                                boardId.Contains("esp32c5") OrElse boardId.Contains("esp32p4")
+
+                If isNewBoard AndAlso parameters.ContainsKey("FlashFreq") Then
+                    parameters.Remove("FlashFreq")
+                End If
+
                 ' Build parameter string
                 Dim paramList As New List(Of String)
 
@@ -766,8 +1285,8 @@ Public Class BoardManager
                 boardConfigurations(boardName) = newFqbn
 
                 ' Log the change
-                Debug.WriteLine($"[2025-08-12 13:03:54] Updated board configuration for {boardName}: {newFqbn}")
-                Debug.WriteLine($"[2025-08-12 13:03:54] Configuration updated by Chamil1983")
+                Debug.WriteLine($"[2025-08-13 12:33:59] Updated board configuration for {boardName}: {newFqbn}")
+                Debug.WriteLine($"[2025-08-13 12:33:59] Configuration updated by Chamil1983")
             End If
         Else
             ' Add new board configuration
@@ -780,12 +1299,32 @@ Public Class BoardManager
                 boardId = "esp32s2"
             ElseIf boardName.Contains("S3") Then
                 boardId = "esp32s3"
+            ElseIf boardName.Contains("C2") Then
+                boardId = "esp32c2"
             ElseIf boardName.Contains("C3") Then
                 boardId = "esp32c3"
+            ElseIf boardName.Contains("C6") Then
+                boardId = "esp32c6"
+            ElseIf boardName.Contains("H2") Then
+                boardId = "esp32h2"
+            ElseIf boardName.Contains("C5") Then
+                boardId = "esp32c5"
+            ElseIf boardName.Contains("P4") Then
+                boardId = "esp32p4"
             ElseIf boardName.Contains("Wrover") Then
                 boardId = "esp32wrover"
             ElseIf boardName.Contains("Pico") Then
                 boardId = "pico32"
+            End If
+
+            ' Check if this is an S2/S3/C3 board and remove FlashFreq if present
+            Dim isNewBoard = boardId.Contains("esp32s2") OrElse boardId.Contains("esp32s3") OrElse
+                            boardId.Contains("esp32c3") OrElse boardId.Contains("esp32c2") OrElse
+                            boardId.Contains("esp32c6") OrElse boardId.Contains("esp32h2") OrElse
+                            boardId.Contains("esp32c5") OrElse boardId.Contains("esp32p4")
+
+            If isNewBoard AndAlso parameters.ContainsKey("FlashFreq") Then
+                parameters.Remove("FlashFreq")
             End If
 
             ' Build parameter string
@@ -832,8 +1371,8 @@ Public Class BoardManager
             boardIdMap(boardName) = boardId
 
             ' Log the addition
-            Debug.WriteLine($"[2025-08-12 13:03:54] Added new board configuration for {boardName}: {newFqbn}")
-            Debug.WriteLine($"[2025-08-12 13:03:54] Configuration created by Chamil1983")
+            Debug.WriteLine($"[2025-08-13 12:38:37] Added new board configuration for {boardName}: {newFqbn}")
+            Debug.WriteLine($"[2025-08-13 12:38:37] Configuration created by Chamil1983")
         End If
     End Sub
 
@@ -875,7 +1414,7 @@ Public Class BoardManager
                 Next
             Catch ex As Exception
                 ' Ignore errors
-                Debug.WriteLine($"[2025-08-12 13:03:54] Error reading partition files: {ex.Message}")
+                Debug.WriteLine($"[2025-08-13 12:38:37] Error reading partition files: {ex.Message}")
             End Try
         End If
 
@@ -906,11 +1445,18 @@ Public Class BoardManager
         ' Default values
         parameters("CPUFreq") = "240"
         parameters("FlashMode") = "dio"
-        parameters("FlashFreq") = "80"
         parameters("PartitionScheme") = "default"
         parameters("UploadSpeed") = "921600"
         parameters("DebugLevel") = "none"
         parameters("PSRAM") = "disabled"
+
+        ' Only set FlashFreq for original ESP32 boards
+        If Not fqbn.Contains("esp32s2") AndAlso Not fqbn.Contains("esp32s3") AndAlso
+           Not fqbn.Contains("esp32c3") AndAlso Not fqbn.Contains("esp32c2") AndAlso
+           Not fqbn.Contains("esp32c6") AndAlso Not fqbn.Contains("esp32h2") AndAlso
+           Not fqbn.Contains("esp32c5") AndAlso Not fqbn.Contains("esp32p4") Then
+            parameters("FlashFreq") = "80"
+        End If
 
         ' Parse parameters from FQBN
         If fqbn.Contains(":") Then
@@ -930,6 +1476,26 @@ Public Class BoardManager
             End If
         End If
 
+        ' Add additional parameters for ESP32-S3 if needed
+        If fqbn.Contains("esp32s3") Then
+            If Not parameters.ContainsKey("USBMode") Then parameters("USBMode") = "hwcdc"
+            If Not parameters.ContainsKey("CDCOnBoot") Then parameters("CDCOnBoot") = "default"
+            If Not parameters.ContainsKey("MSCOnBoot") Then parameters("MSCOnBoot") = "default"
+            If Not parameters.ContainsKey("DFUOnBoot") Then parameters("DFUOnBoot") = "default"
+            If Not parameters.ContainsKey("UploadMode") Then parameters("UploadMode") = "default"
+            If Not parameters.ContainsKey("FlashSize") Then parameters("FlashSize") = "4M"
+            If Not parameters.ContainsKey("LoopCore") Then parameters("LoopCore") = "1"
+            If Not parameters.ContainsKey("EventsCore") Then parameters("EventsCore") = "1"
+            If Not parameters.ContainsKey("EraseFlash") Then parameters("EraseFlash") = "none"
+            If Not parameters.ContainsKey("JTAGAdapter") Then parameters("JTAGAdapter") = "default"
+        ElseIf fqbn.Contains("esp32s2") Then
+            If Not parameters.ContainsKey("USBMode") Then parameters("USBMode") = "hwcdc"
+            If Not parameters.ContainsKey("CDCOnBoot") Then parameters("CDCOnBoot") = "default"
+            If Not parameters.ContainsKey("MSCOnBoot") Then parameters("MSCOnBoot") = "default"
+            If Not parameters.ContainsKey("DFUOnBoot") Then parameters("DFUOnBoot") = "default"
+            If Not parameters.ContainsKey("UploadMode") Then parameters("UploadMode") = "default"
+        End If
+
         Return parameters
     End Function
 
@@ -943,6 +1509,17 @@ Public Class BoardManager
         ' Get menu options for the board
         If boardMenuOptions.ContainsKey(boardName) Then
             For Each category In standardCategories
+                ' Skip FlashFreq for S2/S3/C3 boards
+                If category = "FlashFreq" Then
+                    Dim boardId = GetBoardId(boardName)
+                    If boardId.Contains("esp32s2") OrElse boardId.Contains("esp32s3") OrElse
+                       boardId.Contains("esp32c3") OrElse boardId.Contains("esp32c2") OrElse
+                       boardId.Contains("esp32c6") OrElse boardId.Contains("esp32h2") OrElse
+                       boardId.Contains("esp32c5") OrElse boardId.Contains("esp32p4") Then
+                        Continue For
+                    End If
+                End If
+
                 If boardMenuOptions(boardName).ContainsKey(category) Then
                     Dim options As New List(Of KeyValuePair(Of String, String))
 
@@ -974,6 +1551,17 @@ Public Class BoardManager
 
         ' If options are still missing, add defaults
         For Each category In standardCategories
+            ' Skip FlashFreq for S2/S3/C3 boards
+            If category = "FlashFreq" Then
+                Dim boardId = GetBoardId(boardName)
+                If boardId.Contains("esp32s2") OrElse boardId.Contains("esp32s3") OrElse
+                   boardId.Contains("esp32c3") OrElse boardId.Contains("esp32c2") OrElse
+                   boardId.Contains("esp32c6") OrElse boardId.Contains("esp32h2") OrElse
+                   boardId.Contains("esp32c5") OrElse boardId.Contains("esp32p4") Then
+                    Continue For
+                End If
+            End If
+
             If Not allOptions.ContainsKey(category) Then
                 Dim defaultOptions = GetParameterOptions(boardName, category)
                 Dim options As New List(Of KeyValuePair(Of String, String))
@@ -983,13 +1571,67 @@ Public Class BoardManager
                     options.Add(New KeyValuePair(Of String, String)(kvp.Key, kvp.Value))
                 Next
 
-                ' Add to result dictionary
-                allOptions(category) = options
+                ' Add to result dictionary if we have options
+                If options.Count > 0 Then
+                    allOptions(category) = options
+                End If
             End If
         Next
 
+        ' Add ESP32-S2/S3 specific options if needed
+        Dim boardType = GetBoardId(boardName)
+        If boardType.Contains("esp32s2") Then
+            AddS2SpecificOptions(allOptions, boardName)
+        ElseIf boardType.Contains("esp32s3") Then
+            AddS3SpecificOptions(allOptions, boardName)
+        End If
+
         Return allOptions
     End Function
+
+    ' Add ESP32-S2 specific options
+    Private Sub AddS2SpecificOptions(allOptions As Dictionary(Of String, List(Of KeyValuePair(Of String, String))), boardName As String)
+        Dim s2Categories As String() = {"USBMode", "CDCOnBoot", "MSCOnBoot", "DFUOnBoot", "UploadMode"}
+
+        For Each category In s2Categories
+            If Not allOptions.ContainsKey(category) Then
+                Dim options = GetParameterOptions(boardName, category)
+                Dim optionsList As New List(Of KeyValuePair(Of String, String))
+
+                For Each kvp In options
+                    optionsList.Add(New KeyValuePair(Of String, String)(kvp.Key, kvp.Value))
+                Next
+
+                If optionsList.Count > 0 Then
+                    allOptions(category) = optionsList
+                End If
+            End If
+        Next
+    End Sub
+
+    ' Add ESP32-S3 specific options
+    Private Sub AddS3SpecificOptions(allOptions As Dictionary(Of String, List(Of KeyValuePair(Of String, String))), boardName As String)
+        ' First add all S2 options
+        AddS2SpecificOptions(allOptions, boardName)
+
+        ' Then add S3-specific options
+        Dim s3Categories As String() = {"FlashSize", "LoopCore", "EventsCore", "EraseFlash", "JTAGAdapter"}
+
+        For Each category In s3Categories
+            If Not allOptions.ContainsKey(category) Then
+                Dim options = GetParameterOptions(boardName, category)
+                Dim optionsList As New List(Of KeyValuePair(Of String, String))
+
+                For Each kvp In options
+                    optionsList.Add(New KeyValuePair(Of String, String)(kvp.Key, kvp.Value))
+                Next
+
+                If optionsList.Count > 0 Then
+                    allOptions(category) = optionsList
+                End If
+            End If
+        Next
+    End Sub
 
     ' Helper class to sort version directories
     Private Class VersionComparer
