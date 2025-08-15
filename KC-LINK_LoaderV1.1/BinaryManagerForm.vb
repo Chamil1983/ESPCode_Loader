@@ -6,7 +6,7 @@ Imports System.IO
 Imports System.IO.Compression
 Imports System.Windows.Forms
 
-Namespace KC_LINK_LoaderV1._1
+Namespace KC_LINK_LoaderV1
     Public Class BinaryManagerForm
         Inherits Form
 

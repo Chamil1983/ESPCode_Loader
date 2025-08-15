@@ -10,7 +10,7 @@ Imports System.Text.RegularExpressions
 Imports System.Threading
 Imports System.Threading.Tasks
 Imports System.Windows.Forms
-Imports KC_LINK_LoaderV1._1
+Imports KC_LINK_LoaderV1
 
 
 Public Class MainForm
@@ -675,7 +675,7 @@ Public Class MainForm
 
         ' Default Arduino CLI location
         If String.IsNullOrEmpty(My.Settings.ArduinoCliPath) Then
-            My.Settings.ArduinoCliPath = Path.Combine(Application.StartupPath, "C:\Users\chami\bin\arduino-cli.exe")
+            My.Settings.ArduinoCliPath = Path.Combine(Application.StartupPath, "C:\Users\gen_rms_testroom\Documents\Arduino\Arduino CLI\arduino-cli.exe")
             My.Settings.Save()
         End If
     End Sub
@@ -812,7 +812,6 @@ Public Class MainForm
             SaveBoardSettings()
         End If
     End Sub
-
 
     Private Sub ApplyBoardConfiguration()
         ' Ensure the current board configuration is saved and applied
@@ -1083,20 +1082,20 @@ Public Class MainForm
     ' NEW: Handler for Zip Upload button
     Private Sub btnZipUpload_Click(sender As Object, e As EventArgs)
         ' Open the Zip Upload form
-        Dim zipUploadForm As New KC_LINK_LoaderV1._1.ZipUploadForm()
+        Dim zipUploadForm As New KC_LINK_LoaderV1.ZipUploadForm()
         zipUploadForm.ShowDialog()
     End Sub
 
     ' NEW: Handler for Binary Upload button
     Private Sub btnBinaryUpload_Click(sender As Object, e As EventArgs)
         ' Open the Binary Upload form
-        Dim binaryUploadForm As New KC_LINK_LoaderV1._1.BinaryUploadForm()
+        Dim binaryUploadForm As New KC_LINK_LoaderV1.BinaryUploadForm()
         binaryUploadForm.ShowDialog()
     End Sub
 
     ' NEW: Handler for Binary Manager menu item
     Private Sub mnuBinaryManager_Click(sender As Object, e As EventArgs)
-        Dim binaryManager As New KC_LINK_LoaderV1._1.BinaryManagerForm()
+        Dim binaryManager As New KC_LINK_LoaderV1.BinaryManagerForm()
         binaryManager.ShowDialog()
     End Sub
 
@@ -1679,7 +1678,7 @@ Public Class MainForm
             Dim projectName As String = Path.GetFileName(projectNameOrPath)
 
             ' Extract build path from compilation output
-            buildFolderPath = KC_LINK_LoaderV1._1.BinaryExporter.ExtractBuildPathFromOutput(compilationOutput)
+            buildFolderPath = KC_LINK_LoaderV1.BinaryExporter.ExtractBuildPathFromOutput(compilationOutput)
 
             If String.IsNullOrEmpty(buildFolderPath) Then
                 AppendToOutput("Could not determine build folder path from compilation output.")
@@ -1690,7 +1689,7 @@ Public Class MainForm
             Dim exportPath As String = Path.Combine(projectPath, "export")
 
             ' Export binaries
-            Dim success As Boolean = KC_LINK_LoaderV1._1.BinaryExporter.ExportBinaries(
+            Dim success As Boolean = KC_LINK_LoaderV1.BinaryExporter.ExportBinaries(
                 buildFolderPath,
                 projectName,
                 exportPath,
@@ -1723,7 +1722,7 @@ Public Class MainForm
                 End If
 
                 ' Show the export complete dialog
-                Dim dialog As New KC_LINK_LoaderV1._1.ExportCompleteDialog(exportPath, exportedFiles, zipPath)
+                Dim dialog As New KC_LINK_LoaderV1.ExportCompleteDialog(exportPath, exportedFiles, zipPath)
                 dialog.ShowDialog()
             Else
                 AppendToOutput("Failed to export binaries.")
@@ -2403,4 +2402,5 @@ Public Class ColoredProgressBar
             End Using
         End If
     End Sub
+
 End Class

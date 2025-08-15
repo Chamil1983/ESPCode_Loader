@@ -7,7 +7,7 @@ Imports System.Threading
 Imports System.IO.Compression
 
 
-Namespace KC_LINK_LoaderV1._1
+Namespace KC_LINK_LoaderV1
     Public Class ZipUploadForm
         Inherits Form
 
@@ -465,6 +465,7 @@ Namespace KC_LINK_LoaderV1._1
             Dim zipPath As String = args(0)
             Dim port As String = args(1)
             Dim uploadSuccess As Boolean = True
+            Dim chipType As String = "esp32" ' Default chip type
 
             ' Create temporary directory for extraction
             tempDirectory = Path.Combine(Path.GetTempPath(), "ESP32Upload_" & Guid.NewGuid().ToString())
@@ -494,9 +495,9 @@ Namespace KC_LINK_LoaderV1._1
                 Dim partitionFile As String = binFiles.FirstOrDefault(Function(f) Path.GetFileName(f).ToLower().Contains("partition"))
                 Dim bootAppFile As String = binFiles.FirstOrDefault(Function(f) Path.GetFileName(f).ToLower().Contains("boot_app0"))
                 Dim applicationFile As String = binFiles.FirstOrDefault(Function(f) Not (
-                Path.GetFileName(f).ToLower().Contains("bootloader") OrElse
-                Path.GetFileName(f).ToLower().Contains("partition") OrElse
-                Path.GetFileName(f).ToLower().Contains("boot_app0")))
+            Path.GetFileName(f).ToLower().Contains("bootloader") OrElse
+            Path.GetFileName(f).ToLower().Contains("partition") OrElse
+            Path.GetFileName(f).ToLower().Contains("boot_app0")))
 
                 ' If no application file is found, use the first bin file
                 If String.IsNullOrEmpty(applicationFile) AndAlso binFiles.Count > 0 Then
@@ -504,10 +505,10 @@ Namespace KC_LINK_LoaderV1._1
                 End If
 
                 ' Default addresses from BinaryExporter class
-                Dim bootloaderAddr As String = KC_LINK_LoaderV1._1.BinaryExporter.DefaultBootloaderAddress    ' 0x1000
-                Dim partitionAddr As String = KC_LINK_LoaderV1._1.BinaryExporter.DefaultPartitionAddress      ' 0x8000
-                Dim bootAppAddr As String = KC_LINK_LoaderV1._1.BinaryExporter.DefaultBootApp0Address         ' 0xe000
-                Dim applicationAddr As String = KC_LINK_LoaderV1._1.BinaryExporter.DefaultApplicationAddress  ' 0x10000
+                Dim bootloaderAddr As String = KC_LINK_LoaderV1.BinaryExporter.DefaultBootloaderAddress    ' 0x1000
+                Dim partitionAddr As String = KC_LINK_LoaderV1.BinaryExporter.DefaultPartitionAddress      ' 0x8000
+                Dim bootAppAddr As String = KC_LINK_LoaderV1.BinaryExporter.DefaultBootApp0Address         ' 0xe000
+                Dim applicationAddr As String = KC_LINK_LoaderV1.BinaryExporter.DefaultApplicationAddress  ' 0x10000
 
                 worker.ReportProgress(35, "Using standard ESP32 flash addresses:")
                 worker.ReportProgress(35, "Bootloader: " & bootloaderAddr)
@@ -525,6 +526,20 @@ Namespace KC_LINK_LoaderV1._1
                         For Each line In lines
                             ' Skip comments and empty lines
                             If line.Trim().StartsWith("#") OrElse String.IsNullOrWhiteSpace(line) Then Continue For
+
+                            ' Look for chip type indicators
+                            If line.ToLower().Contains("chip:") OrElse line.ToLower().Contains("board:") Then
+                                If line.ToLower().Contains("esp32-s3") Then
+                                    chipType = "esp32s3"
+                                    worker.ReportProgress(40, "Detected ESP32-S3 chip from manifest")
+                                ElseIf line.ToLower().Contains("esp32-s2") Then
+                                    chipType = "esp32s2"
+                                    worker.ReportProgress(40, "Detected ESP32-S2 chip from manifest")
+                                ElseIf line.ToLower().Contains("esp32-c3") Then
+                                    chipType = "esp32c3"
+                                    worker.ReportProgress(40, "Detected ESP32-C3 chip from manifest")
+                                End If
+                            End If
 
                             ' Parse address info (format: filename: address)
                             Dim parts = line.Split(New Char() {":"c}, 2)
@@ -544,9 +559,9 @@ Namespace KC_LINK_LoaderV1._1
                                     bootAppAddr = address
                                     worker.ReportProgress(40, "Using custom boot_app0 address: " & bootAppAddr)
                                 ElseIf Not (fileName.ToLower().Contains("bootloader") OrElse
-                                           fileName.ToLower().Contains("partition") OrElse
-                                           fileName.ToLower().Contains("boot_app0") OrElse
-                                           fileName.ToLower().Contains("merged")) Then
+                                  fileName.ToLower().Contains("partition") OrElse
+                                  fileName.ToLower().Contains("boot_app0") OrElse
+                                  fileName.ToLower().Contains("merged")) Then
                                     applicationAddr = address
                                     worker.ReportProgress(40, "Using custom application address: " & applicationAddr)
                                 End If
@@ -590,6 +605,72 @@ Namespace KC_LINK_LoaderV1._1
                     End Try
                 End If
 
+                ' Try to detect chip type using esptool if not already detected
+                If chipType = "esp32" Then
+                    Try
+                        worker.ReportProgress(45, "Attempting to detect chip type using esptool...")
+                        Dim chipDetectProcessInfo As New ProcessStartInfo()
+
+                        If esptoolPath.EndsWith(".exe") Then
+                            chipDetectProcessInfo.FileName = esptoolPath
+                            chipDetectProcessInfo.Arguments = $"--port {port} chip_id"
+                        ElseIf esptoolPath.Contains(" -m ") Then
+                            Dim parts = esptoolPath.Split(New String() {" -m "}, StringSplitOptions.None)
+                            chipDetectProcessInfo.FileName = parts(0) ' python or python3
+                            chipDetectProcessInfo.Arguments = "-m esptool --port " & port & " chip_id"
+                        ElseIf esptoolPath.EndsWith(".py") Then
+                            chipDetectProcessInfo.FileName = "python"
+                            chipDetectProcessInfo.Arguments = """" & esptoolPath & """ --port " & port & " chip_id"
+                        End If
+
+                        chipDetectProcessInfo.UseShellExecute = False
+                        chipDetectProcessInfo.CreateNoWindow = True
+                        chipDetectProcessInfo.RedirectStandardOutput = True
+                        chipDetectProcessInfo.RedirectStandardError = True
+
+                        Dim chipDetectProcess As New Process()
+                        chipDetectProcess.StartInfo = chipDetectProcessInfo
+
+                        Dim chipOutput As New System.Text.StringBuilder()
+
+                        AddHandler chipDetectProcess.OutputDataReceived, Sub(s, outputData)
+                                                                             If Not String.IsNullOrEmpty(outputData.Data) Then
+                                                                                 chipOutput.AppendLine(outputData.Data)
+                                                                             End If
+                                                                         End Sub
+
+                        AddHandler chipDetectProcess.ErrorDataReceived, Sub(s, errorData)
+                                                                            If Not String.IsNullOrEmpty(errorData.Data) Then
+                                                                                chipOutput.AppendLine("ERROR: " & errorData.Data)
+                                                                            End If
+                                                                        End Sub
+
+                        chipDetectProcess.Start()
+                        chipDetectProcess.BeginOutputReadLine()
+                        chipDetectProcess.BeginErrorReadLine()
+
+                        ' Wait max 5 seconds for chip detection
+                        chipDetectProcess.WaitForExit(5000)
+
+                        Dim chipOutputStr = chipOutput.ToString()
+                        worker.ReportProgress(45, "Chip detection output: " & chipOutputStr)
+
+                        ' Check for specific chip mentions in the output
+                        If chipOutputStr.Contains("ESP32-S3") Then
+                            chipType = "esp32s3"
+                            worker.ReportProgress(45, "Detected ESP32-S3 chip via esptool")
+                        ElseIf chipOutputStr.Contains("ESP32-S2") Then
+                            chipType = "esp32s2"
+                            worker.ReportProgress(45, "Detected ESP32-S2 chip via esptool")
+                        ElseIf chipOutputStr.Contains("ESP32-C3") Then
+                            chipType = "esp32c3"
+                            worker.ReportProgress(45, "Detected ESP32-C3 chip via esptool")
+                        End If
+                    Catch ex As Exception
+                        worker.ReportProgress(45, "Error detecting chip type: " & ex.Message)
+                    End Try
+                End If
+
                 ' Add file list for upload
                 Dim fileList As String = ""
 
@@ -613,7 +694,7 @@ Namespace KC_LINK_LoaderV1._1
                     worker.ReportProgress(48, "Using application: " & Path.GetFileName(applicationFile))
                 End If
 
-                worker.ReportProgress(50, "Command: write_flash --chip esp32 --port " & port & " --baud 460800 --flash_mode dio --flash_freq 40m --flash_size detect " & fileList)
+                worker.ReportProgress(50, $"Command: write_flash --chip {chipType} --port {port} --baud 460800 --flash_mode dio --flash_freq 40m --flash_size detect {fileList}")
 
                 ' Execute the correct esptool command format based on the path
                 Try
@@ -624,19 +705,19 @@ Namespace KC_LINK_LoaderV1._1
                     If esptoolPath.EndsWith(".exe") Then
                         ' Standalone executable - don't use --chip parameter with write_flash
                         processInfo.FileName = esptoolPath
-                        cmdArgs = "--chip esp32 --port " & port & " --baud 460800 write_flash --flash_mode dio --flash_freq 40m --flash_size detect " & fileList
+                        cmdArgs = $"--chip {chipType} --port {port} --baud 460800 write_flash --flash_mode dio --flash_freq 40m --flash_size detect {fileList}"
                         worker.ReportProgress(52, "Using Arduino ESP32 esptool.exe")
                     ElseIf esptoolPath.Contains(" -m ") Then
                         ' Python module
                         Dim parts = esptoolPath.Split(New String() {" -m "}, StringSplitOptions.None)
                         processInfo.FileName = parts(0) ' python or python3
-                        cmdArgs = "-m esptool --chip esp32 --port " & port & " --baud 460800 write_flash --flash_mode dio --flash_freq 40m --flash_size detect " & fileList
+                        cmdArgs = $"-m esptool --chip {chipType} --port {port} --baud 460800 write_flash --flash_mode dio --flash_freq 40m --flash_size detect {fileList}"
                         worker.ReportProgress(52, "Using Python esptool.py module")
                     ElseIf esptoolPath.EndsWith(".py") Then
                         ' Python script - need to find Python
                         Try
                             processInfo.FileName = "python"
-                            cmdArgs = """" & esptoolPath & """ --chip esp32 --port " & port & " --baud 460800 write_flash --flash_mode dio --flash_freq 40m --flash_size detect " & fileList
+                            cmdArgs = $"""" & esptoolPath & """ --chip {chipType} --port {port} --baud 460800 write_flash --flash_mode dio --flash_freq 40m --flash_size detect {fileList}"
                             worker.ReportProgress(52, "Using Python script esptool.py")
                         Catch ex As Exception
                             ' Try with python3
@@ -646,7 +727,7 @@ Namespace KC_LINK_LoaderV1._1
                     Else
                         ' Unknown format - try direct execution
                         processInfo.FileName = esptoolPath
-                        cmdArgs = "--chip esp32 --port " & port & " --baud 460800 write_flash --flash_mode dio --flash_freq 40m --flash_size detect " & fileList
+                        cmdArgs = $"--chip {chipType} --port {port} --baud 460800 write_flash --flash_mode dio --flash_freq 40m --flash_size detect {fileList}"
                         worker.ReportProgress(52, "Using direct execution of esptool")
                     End If
 
@@ -680,10 +761,27 @@ Namespace KC_LINK_LoaderV1._1
                                                                End If
                                                            End Sub
 
+                    ' Set up a flag to detect chip type from error message
+                    Dim detectedChipFromError As Boolean = False
+
                     AddHandler process.ErrorDataReceived, Sub(s, errorData)
                                                               If Not String.IsNullOrEmpty(errorData.Data) Then
                                                                   worker.ReportProgress(0, "ERROR: " & errorData.Data)
-                                                                  uploadSuccess = False
+
+                                                                  ' Check for specific chip type errors and adjust if needed
+                                                                  If errorData.Data.Contains("This chip is ESP32-S3") Then
+                                                                      chipType = "esp32s3"
+                                                                      detectedChipFromError = True
+                                                                      worker.ReportProgress(0, "Detected ESP32-S3 chip from error message, will retry with correct chip type")
+                                                                  ElseIf errorData.Data.Contains("This chip is ESP32-S2") Then
+                                                                      chipType = "esp32s2"
+                                                                      detectedChipFromError = True
+                                                                      worker.ReportProgress(0, "Detected ESP32-S2 chip from error message, will retry with correct chip type")
+                                                                  ElseIf errorData.Data.Contains("This chip is ESP32-C3") Then
+                                                                      chipType = "esp32c3"
+                                                                      detectedChipFromError = True
+                                                                      worker.ReportProgress(0, "Detected ESP32-C3 chip from error message, will retry with correct chip type")
+                                                                  End If
                                                               End If
                                                           End Sub
 
@@ -709,82 +807,79 @@ Namespace KC_LINK_LoaderV1._1
                         worker.ReportProgress(0, "Upload failed with exit code: " & process.ExitCode)
                         uploadSuccess = False
 
-                        ' Try one more time with a different command format as fallback
-                        If uploadSuccess = False Then
-                            worker.ReportProgress(0, "Trying alternative command format...")
+                        ' If chip type was detected from errors, retry with correct chip type
+                        If detectedChipFromError Then
+                            worker.ReportProgress(0, $"Retrying with detected chip type: {chipType}")
 
-                            Dim altProcessInfo As New ProcessStartInfo()
-                            altProcessInfo.FileName = processInfo.FileName
-
-                            ' Swap the parameter order for write_flash
-                            If processInfo.Arguments.Contains("write_flash --flash_mode") Then
-                                ' Move chip/port parameters after write_flash
-                                altProcessInfo.Arguments = "write_flash --chip esp32 --port " & port & " --baud 460800 --flash_mode dio --flash_freq 40m --flash_size detect " & fileList
+                            ' Update the command with new chip type
+                            If processInfo.Arguments.Contains("--chip esp32") Then
+                                processInfo.Arguments = processInfo.Arguments.Replace("--chip esp32", $"--chip {chipType}")
                             Else
-                                ' Move flash mode parameters before write_flash
-                                altProcessInfo.Arguments = "--chip esp32 --port " & port & " --baud 460800 write_flash --flash_mode dio --flash_freq 40m --flash_size detect " & fileList
+                                ' If for some reason the original command doesn't have the chip parameter as expected
+                                worker.ReportProgress(0, "Warning: Could not update chip type in command string")
                             End If
 
-                            worker.ReportProgress(56, "Alternative command: " & altProcessInfo.FileName & " " & altProcessInfo.Arguments)
+                            ' Create a new process with the updated command
+                            Dim retryProcess As New Process()
+                            retryProcess.StartInfo = processInfo
+                            retryProcess.EnableRaisingEvents = True
 
-                            altProcessInfo.UseShellExecute = False
-                            altProcessInfo.CreateNoWindow = True
-                            altProcessInfo.RedirectStandardOutput = True
-                            altProcessInfo.RedirectStandardError = True
+                            ' Re-attach the handlers
+                            AddHandler retryProcess.OutputDataReceived, Sub(s, outputData)
+                                                                            If Not String.IsNullOrEmpty(outputData.Data) Then
+                                                                                worker.ReportProgress(0, outputData.Data)
 
-                            Dim altProcess As New Process()
-                            altProcess.StartInfo = altProcessInfo
-                            altProcess.EnableRaisingEvents = True
+                                                                                ' Update progress based on output
+                                                                                If outputData.Data.Contains("Writing at") Then
+                                                                                    worker.ReportProgress(60, Nothing)
+                                                                                ElseIf outputData.Data.Contains("Written ") Then
+                                                                                    worker.ReportProgress(70, Nothing)
+                                                                                ElseIf outputData.Data.Contains("Verifying ") Then
+                                                                                    worker.ReportProgress(80, Nothing)
+                                                                                ElseIf outputData.Data.Contains("Hash of data verified") Then
+                                                                                    worker.ReportProgress(90, Nothing)
+                                                                                ElseIf outputData.Data.Contains("Hard resetting") Then
+                                                                                    worker.ReportProgress(95, Nothing)
+                                                                                End If
+                                                                            End If
+                                                                        End Sub
 
-                            ' Setup output handlers
-                            AddHandler altProcess.OutputDataReceived, Sub(s, outputData)
-                                                                          If Not String.IsNullOrEmpty(outputData.Data) Then
-                                                                              worker.ReportProgress(0, outputData.Data)
+                            AddHandler retryProcess.ErrorDataReceived, Sub(s, errorData)
+                                                                           If Not String.IsNullOrEmpty(errorData.Data) Then
+                                                                               worker.ReportProgress(0, "ERROR: " & errorData.Data)
+                                                                           End If
+                                                                       End Sub
 
-                                                                              ' Update progress based on output
-                                                                              If outputData.Data.Contains("Writing at") Then
-                                                                                  worker.ReportProgress(60, Nothing)
-                                                                              ElseIf outputData.Data.Contains("Written ") Then
-                                                                                  worker.ReportProgress(70, Nothing)
-                                                                              ElseIf outputData.Data.Contains("Verifying ") Then
-                                                                                  worker.ReportProgress(80, Nothing)
-                                                                              ElseIf outputData.Data.Contains("Hash of data verified") Then
-                                                                                  worker.ReportProgress(90, Nothing)
-                                                                              ElseIf outputData.Data.Contains("Hard resetting") Then
-                                                                                  worker.ReportProgress(95, Nothing)
-                                                                              End If
-                                                                          End If
-                                                                      End Sub
+                            worker.ReportProgress(55, "Starting retry with correct chip type...")
+                            worker.ReportProgress(56, "Command: " & processInfo.FileName & " " & processInfo.Arguments)
 
-                            AddHandler altProcess.ErrorDataReceived, Sub(s, errorData)
-                                                                         If Not String.IsNullOrEmpty(errorData.Data) Then
-                                                                             worker.ReportProgress(0, "ERROR: " & errorData.Data)
-                                                                         End If
-                                                                     End Sub
-
-                            worker.ReportProgress(55, "Starting alternative upload attempt...")
-
-                            altProcess.Start()
-                            altProcess.BeginOutputReadLine()
-                            altProcess.BeginErrorReadLine()
+                            retryProcess.Start()
+                            retryProcess.BeginOutputReadLine()
+                            retryProcess.BeginErrorReadLine()
 
                             ' Wait for process to exit or cancellation
-                            While Not altProcess.HasExited
+                            While Not retryProcess.HasExited
                                 If worker.CancellationPending Then
-                                    altProcess.Kill()
+                                    retryProcess.Kill()
                                     e.Cancel = True
                                     Return
                                 End If
                                 Thread.Sleep(100)
                             End While
 
-                            ' Process completed, check exit code
-                            If altProcess.ExitCode = 0 Then
-                                worker.ReportProgress(100, "Alternative upload completed successfully!")
+                            ' Check if retry succeeded
+                            If retryProcess.ExitCode = 0 Then
+                                worker.ReportProgress(100, "Upload completed successfully after retry!")
                                 uploadSuccess = True
                             Else
-                                worker.ReportProgress(0, "Alternative upload failed with exit code: " & altProcess.ExitCode)
+                                worker.ReportProgress(0, "Retry upload failed with exit code: " & retryProcess.ExitCode)
+
+                                ' Try alternative command format as fallback
+                                TryAlternativeCommandFormat(worker, processInfo.FileName, chipType, port, fileList, uploadSuccess)
                             End If
+                        Else
+                            ' Try alternative command format as fallback
+                            TryAlternativeCommandFormat(worker, processInfo.FileName, chipType, port, fileList, uploadSuccess)
                         End If
                     Else
                         worker.ReportProgress(100, "Upload completed successfully!")
@@ -801,6 +896,242 @@ Namespace KC_LINK_LoaderV1._1
             End Try
 
             e.Result = uploadSuccess
+        End Sub
+
+        Private Sub TryAlternativeCommandFormat(worker As System.ComponentModel.BackgroundWorker,
+                                       fileName As String,
+                                       chipType As String,
+                                       port As String,
+                                       fileList As String,
+                                       ByRef uploadSuccess As Boolean)
+            worker.ReportProgress(0, "Trying alternative command format...")
+
+            Dim altProcessInfo As New ProcessStartInfo()
+            altProcessInfo.FileName = fileName
+
+            ' IMPORTANT: Create proper command format for this specific chip type
+            ' For ESP32-S3, use more careful settings
+            If chipType.ToLower() = "esp32s3" Then
+                ' ESP32-S3 specific format with appropriate flash mode
+                altProcessInfo.Arguments = $"--port {port} --chip {chipType} --baud 460800 write_flash --flash_mode dio --flash_size detect {fileList}"
+            Else
+                ' Standard format for other ESP32 variants
+                altProcessInfo.Arguments = $"--port {port} --chip {chipType} --baud 460800 write_flash --flash_mode dio --flash_freq 40m --flash_size detect {fileList}"
+            End If
+
+            worker.ReportProgress(0, "Alternative command: " & altProcessInfo.FileName & " " & altProcessInfo.Arguments)
+
+            altProcessInfo.UseShellExecute = False
+            altProcessInfo.CreateNoWindow = True
+            altProcessInfo.RedirectStandardOutput = True
+            altProcessInfo.RedirectStandardError = True
+
+            Dim altProcess As New Process()
+            altProcess.StartInfo = altProcessInfo
+            altProcess.EnableRaisingEvents = True
+
+            ' Setup output handlers
+            AddHandler altProcess.OutputDataReceived, Sub(s, outputData)
+                                                          If Not String.IsNullOrEmpty(outputData.Data) Then
+                                                              worker.ReportProgress(0, outputData.Data)
+
+                                                              ' Update progress based on output
+                                                              If outputData.Data.Contains("Writing at") Then
+                                                                  worker.ReportProgress(60, Nothing)
+                                                              ElseIf outputData.Data.Contains("Written ") Then
+                                                                  worker.ReportProgress(70, Nothing)
+                                                              ElseIf outputData.Data.Contains("Verifying ") Then
+                                                                  worker.ReportProgress(80, Nothing)
+                                                              ElseIf outputData.Data.Contains("Hash of data verified") Then
+                                                                  worker.ReportProgress(90, Nothing)
+                                                              ElseIf outputData.Data.Contains("Hard resetting") Then
+                                                                  worker.ReportProgress(95, Nothing)
+                                                              End If
+                                                          End If
+                                                      End Sub
+
+            AddHandler altProcess.ErrorDataReceived, Sub(s, errorData)
+                                                         If Not String.IsNullOrEmpty(errorData.Data) Then
+                                                             worker.ReportProgress(0, "ERROR: " & errorData.Data)
+
+                                                             ' Check for port busy errors
+                                                             If errorData.Data.Contains("busy") OrElse
+                                                       errorData.Data.Contains("doesn't exist") OrElse
+                                                       errorData.Data.Contains("cannot find") Then
+                                                                 worker.ReportProgress(0, "Port access error detected. Trying with a brief delay...")
+                                                                 Thread.Sleep(1000) ' Add a brief delay before final attempt
+                                                             End If
+                                                         End If
+                                                     End Sub
+
+            worker.ReportProgress(0, "Starting alternative upload attempt...")
+
+            altProcess.Start()
+            altProcess.BeginOutputReadLine()
+            altProcess.BeginErrorReadLine()
+
+            ' Wait for process to exit or cancellation
+            While Not altProcess.HasExited
+                If worker.CancellationPending Then
+                    altProcess.Kill()
+                    Return
+                End If
+                Thread.Sleep(100)
+            End While
+
+            ' Process completed, check exit code
+            If altProcess.ExitCode = 0 Then
+                worker.ReportProgress(100, "Alternative upload completed successfully!")
+                uploadSuccess = True
+            Else
+                worker.ReportProgress(0, "Alternative upload failed with exit code: " & altProcess.ExitCode)
+
+                ' ESP32-S3 fallback with minimal options
+                If chipType.ToLower() = "esp32s3" Then
+                    worker.ReportProgress(0, "Trying ESP32-S3 specific fallback command...")
+
+                    ' Simplest format for ESP32-S3 with absolute minimal parameters
+                    Dim s3ProcessInfo As New ProcessStartInfo()
+                    s3ProcessInfo.FileName = fileName
+                    s3ProcessInfo.Arguments = $"--port {port} --chip esp32s3 write_flash {fileList}"
+
+                    worker.ReportProgress(0, "ESP32-S3 fallback command: " & s3ProcessInfo.FileName & " " & s3ProcessInfo.Arguments)
+
+                    s3ProcessInfo.UseShellExecute = False
+                    s3ProcessInfo.CreateNoWindow = True
+                    s3ProcessInfo.RedirectStandardOutput = True
+                    s3ProcessInfo.RedirectStandardError = True
+
+                    Dim s3Process As New Process()
+                    s3Process.StartInfo = s3ProcessInfo
+                    s3Process.EnableRaisingEvents = True
+
+                    ' Setup output handlers
+                    AddHandler s3Process.OutputDataReceived, Sub(s, outputData)
+                                                                 If Not String.IsNullOrEmpty(outputData.Data) Then
+                                                                     worker.ReportProgress(0, outputData.Data)
+
+                                                                     ' Update progress based on output
+                                                                     If outputData.Data.Contains("Writing at") Then
+                                                                         worker.ReportProgress(60, Nothing)
+                                                                     ElseIf outputData.Data.Contains("Written ") Then
+                                                                         worker.ReportProgress(70, Nothing)
+                                                                     ElseIf outputData.Data.Contains("Verifying ") Then
+                                                                         worker.ReportProgress(80, Nothing)
+                                                                     ElseIf outputData.Data.Contains("Hash of data verified") Then
+                                                                         worker.ReportProgress(90, Nothing)
+                                                                     ElseIf outputData.Data.Contains("Hard resetting") Then
+                                                                         worker.ReportProgress(95, Nothing)
+                                                                     End If
+                                                                 End If
+                                                             End Sub
+
+                    AddHandler s3Process.ErrorDataReceived, Sub(s, errorData)
+                                                                If Not String.IsNullOrEmpty(errorData.Data) Then
+                                                                    worker.ReportProgress(0, "ERROR: " & errorData.Data)
+                                                                End If
+                                                            End Sub
+
+                    worker.ReportProgress(0, "Starting ESP32-S3 specific upload attempt...")
+
+                    s3Process.Start()
+                    s3Process.BeginOutputReadLine()
+                    s3Process.BeginErrorReadLine()
+
+                    ' Wait for process to exit or cancellation
+                    While Not s3Process.HasExited
+                        If worker.CancellationPending Then
+                            s3Process.Kill()
+                            Return
+                        End If
+                        Thread.Sleep(100)
+                    End While
+
+                    ' Process completed, check exit code
+                    If s3Process.ExitCode = 0 Then
+                        worker.ReportProgress(100, "ESP32-S3 specific upload completed successfully!")
+                        uploadSuccess = True
+                        Return
+                    Else
+                        worker.ReportProgress(0, "ESP32-S3 specific upload failed with exit code: " & s3Process.ExitCode)
+                    End If
+                End If
+
+                ' General fallback approach for all chips
+                worker.ReportProgress(0, "Trying final fallback command format...")
+
+                ' Final fallback - simpler format that might work with older esptool versions
+                Dim finalProcessInfo As New ProcessStartInfo()
+                finalProcessInfo.FileName = fileName
+
+                ' Use basic command format with minimal parameters
+                finalProcessInfo.Arguments = $"--chip {chipType} --port {port} write_flash {fileList}"
+
+                worker.ReportProgress(0, "Final command: " & finalProcessInfo.FileName & " " & finalProcessInfo.Arguments)
+
+                finalProcessInfo.UseShellExecute = False
+                finalProcessInfo.CreateNoWindow = True
+                finalProcessInfo.RedirectStandardOutput = True
+                finalProcessInfo.RedirectStandardError = True
+
+                Dim finalProcess As New Process()
+                finalProcess.StartInfo = finalProcessInfo
+                finalProcess.EnableRaisingEvents = True
+
+                ' Setup output handlers
+                AddHandler finalProcess.OutputDataReceived, Sub(s, outputData)
+                                                                If Not String.IsNullOrEmpty(outputData.Data) Then
+                                                                    worker.ReportProgress(0, outputData.Data)
+
+                                                                    ' Update progress based on output
+                                                                    If outputData.Data.Contains("Writing at") Then
+                                                                        worker.ReportProgress(60, Nothing)
+                                                                    ElseIf outputData.Data.Contains("Written ") Then
+                                                                        worker.ReportProgress(70, Nothing)
+                                                                    ElseIf outputData.Data.Contains("Verifying ") Then
+                                                                        worker.ReportProgress(80, Nothing)
+                                                                    ElseIf outputData.Data.Contains("Hash of data verified") Then
+                                                                        worker.ReportProgress(90, Nothing)
+                                                                    ElseIf outputData.Data.Contains("Hard resetting") Then
+                                                                        worker.ReportProgress(95, Nothing)
+                                                                    End If
+                                                                End If
+                                                            End Sub
+
+                AddHandler finalProcess.ErrorDataReceived, Sub(s, errorData)
+                                                               If Not String.IsNullOrEmpty(errorData.Data) Then
+                                                                   worker.ReportProgress(0, "ERROR: " & errorData.Data)
+                                                               End If
+                                                           End Sub
+
+                worker.ReportProgress(0, "Starting final upload attempt...")
+
+                finalProcess.Start()
+                finalProcess.BeginOutputReadLine()
+                finalProcess.BeginErrorReadLine()
+
+                ' Wait for process to exit or cancellation
+                While Not finalProcess.HasExited
+                    If worker.CancellationPending Then
+                        finalProcess.Kill()
+                        Return
+                    End If
+                    Thread.Sleep(100)
+                End While
+
+                ' Process completed, check exit code
+                If finalProcess.ExitCode = 0 Then
+                    worker.ReportProgress(100, "Final upload attempt completed successfully!")
+                    uploadSuccess = True
+                Else
+                    worker.ReportProgress(0, "All upload attempts failed with exit code: " & finalProcess.ExitCode)
+                    worker.ReportProgress(0, "Possible causes:")
+                    worker.ReportProgress(0, "1. COM port is busy or device is not connected")
+                    worker.ReportProgress(0, "2. Device is in bootloader mode or needs to be reset")
+                    worker.ReportProgress(0, "3. Incorrect chip type or flash settings")
+                    worker.ReportProgress(0, "Please check your connections and try again.")
+                End If
+            End If
         End Sub
 
         Private Sub BgWorker_ProgressChanged(sender As Object, e As System.ComponentModel.ProgressChangedEventArgs)

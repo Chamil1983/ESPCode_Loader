@@ -4,7 +4,7 @@ Imports System.Drawing
 Imports System.IO
 Imports System.Diagnostics
 
-Namespace KC_LINK_LoaderV1._1
+Namespace KC_LINK_LoaderV1
     Public Class ExportCompleteDialog
         Inherits Form
 
@@ -301,4 +301,5 @@ Namespace KC_LINK_LoaderV1._1
             Me.Close()
         End Sub
     End Class
+
 End Namespace
