@@ -15,21 +15,16 @@ Public Class BoardConfigDialog
     Private WithEvents tabBoardConfig As TabPage
     Private WithEvents tabFQBN As TabPage
     Private WithEvents tabAdvanced As TabPage
-
     Private WithEvents cmbBoardType As ComboBox
     Private WithEvents lblBoardSelection As Label
     Private WithEvents btnReload As Button
-
     Private WithEvents configPanel As TableLayoutPanel
     Private parameterControls As New Dictionary(Of String, Object)()
-
     Private WithEvents txtFQBN As TextBox
     Private WithEvents btnSaveFQBN As Button
-
     Private WithEvents txtBoardsFile As TextBox
     Private WithEvents btnBrowseBoardsFile As Button
     Private WithEvents btnReloadBoardsFile As Button
-
     Private WithEvents btnSave As Button
     Private WithEvents btnCancel As Button
     Private WithEvents btnResetDefaults As Button
@@ -188,8 +183,8 @@ Public Class BoardConfigDialog
         boardInfoTextBox.ReadOnly = True
         boardInfoTextBox.BackColor = SystemColors.Window
         boardInfoTextBox.Text = "The boards.txt file contains definitions for ESP32 boards." & Environment.NewLine & Environment.NewLine &
-                             "By default, the Arduino-CLI package installation path is used. You can select a custom file if needed." & Environment.NewLine & Environment.NewLine &
-                             "After changing the boards.txt file, click 'Reload' to refresh the board configurations."
+            "By default, the Arduino-CLI package installation path is used. You can select a custom file if needed." & Environment.NewLine & Environment.NewLine &
+            "After changing the boards.txt file, click 'Reload' to refresh the board configurations."
 
         advancedPanel.Controls.Add(lblBoardsFile, 0, 0)
         advancedPanel.Controls.Add(txtBoardsFile, 0, 0)
@@ -281,6 +276,7 @@ Public Class BoardConfigDialog
 
             ' Debug
             Debug.WriteLine($"[2025-08-14 22:32:36] Loaded board parameters with {cmbBoardType.Items.Count} board types by Chamil1983")
+
         Catch ex As Exception
             MessageBox.Show($"Error loading board parameters: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             Debug.WriteLine($"[2025-08-14 22:32:36] Error in LoadBoardParameters: {ex.Message} by Chamil1983")
@@ -301,32 +297,40 @@ Public Class BoardConfigDialog
     Private Sub LoadBoardConfiguration()
         Try
             If cmbBoardType.SelectedItem Is Nothing Then
-                Debug.WriteLine($"[2025-08-14 22:32:36] No board selected in LoadBoardConfiguration by Chamil1983")
+                Debug.WriteLine($"[2025-08-16 19:46:30] No board selected in LoadBoardConfiguration by Chamil1983")
                 Return
             End If
 
             ' Get the current board name
             boardName = cmbBoardType.SelectedItem.ToString()
-            Debug.WriteLine($"[2025-08-14 22:32:36] Loading configuration for board: {boardName} by Chamil1983")
+
+            Debug.WriteLine($"[2025-08-16 19:46:30] Loading configuration for board: {boardName} by Chamil1983")
 
             ' Get the FQBN for this board
             currentFQBN = boardManager.GetFQBN(boardName)
-            Debug.WriteLine($"[2025-08-14 22:32:36] FQBN: {currentFQBN} by Chamil1983")
+
+            Debug.WriteLine($"[2025-08-16 19:46:30] FQBN: {currentFQBN} by Chamil1983")
 
             ' Update the form title
             Me.Text = $"Board Configuration: {boardName}"
 
             ' Extract parameters from the FQBN
             currentParameters = boardManager.ExtractParametersFromFQBN(currentFQBN)
-            Debug.WriteLine($"[2025-08-14 22:32:36] Extracted {currentParameters.Count} parameters from FQBN by Chamil1983")
+
+            ' For ESP32 Dev Module, ensure default FlashFreq is 40MHz as per Main.txt
+            If boardName = "ESP32 Dev Module" AndAlso Not currentParameters.ContainsKey("FlashFreq") Then
+                currentParameters("FlashFreq") = "40"
+            End If
+
+            Debug.WriteLine($"[2025-08-16 19:46:30] Extracted {currentParameters.Count} parameters from FQBN by Chamil1983")
 
             ' Get all configuration options for this board
             boardConfigOptions = boardManager.GetAllBoardConfigOptions(boardName)
 
             ' Log what options we got
-            Debug.WriteLine($"[2025-08-14 22:32:36] Got {boardConfigOptions.Count} configuration categories by Chamil1983")
+            Debug.WriteLine($"[2025-08-16 19:46:30] Got {boardConfigOptions.Count} configuration categories by Chamil1983")
             For Each category In boardConfigOptions.Keys
-                Debug.WriteLine($"[2025-08-14 22:32:36] Category {category} has {boardConfigOptions(category).Count} options by Chamil1983")
+                Debug.WriteLine($"[2025-08-16 19:46:30] Category {category} has {boardConfigOptions(category).Count} options by Chamil1983")
             Next
 
             ' Update the FQBN text
@@ -334,12 +338,12 @@ Public Class BoardConfigDialog
 
             ' Create configuration UI based on available options
             CreateConfigurationUI()
+
         Catch ex As Exception
             MessageBox.Show($"Error loading board configuration: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
-            Debug.WriteLine($"[2025-08-14 22:32:36] Error in LoadBoardConfiguration: {ex.Message} by Chamil1983")
-            ' If we have a more specific exception, log it too
+            Debug.WriteLine($"[2025-08-16 19:46:30] Error in LoadBoardConfiguration: {ex.Message} by Chamil1983")
             If ex.InnerException IsNot Nothing Then
-                Debug.WriteLine($"[2025-08-14 22:32:36] Inner Exception: {ex.InnerException.Message} by Chamil1983")
+                Debug.WriteLine($"[2025-08-16 19:46:30] Inner Exception: {ex.InnerException.Message} by Chamil1983")
             End If
         End Try
     End Sub
@@ -358,6 +362,7 @@ Public Class BoardConfigDialog
 
             ' Get supported menus for this board
             Dim supportedMenus = boardManager.GetSupportedMenus(boardName)
+
             Debug.WriteLine($"[2025-08-14 22:32:36] Board {boardName} supports {supportedMenus.Count} menus by Chamil1983")
 
             ' List to keep track of parameters in order of display
@@ -391,7 +396,7 @@ Public Class BoardConfigDialog
                 Next
 
                 ' Add ESP32-S2 specific parameters if supported
-                If supportedMenus.Contains("USBMode") Then displayOrder.Add("USBMode")
+                'If supportedMenus.Contains("USBMode") Then displayOrder.Add("USBMode")
                 If supportedMenus.Contains("CDCOnBoot") Then displayOrder.Add("CDCOnBoot")
                 If supportedMenus.Contains("MSCOnBoot") Then displayOrder.Add("MSCOnBoot")
                 If supportedMenus.Contains("DFUOnBoot") Then displayOrder.Add("DFUOnBoot")
@@ -445,6 +450,7 @@ Public Class BoardConfigDialog
                     ' Boolean parameter - use checkbox
                     Dim checkBox As New CheckBox()
                     checkBox.Text = "Enable"
+
                     ' Ensure parameter exists before accessing
                     If currentParameters.ContainsKey(paramName) Then
                         checkBox.Checked = (currentParameters(paramName) = "enabled")
@@ -465,6 +471,7 @@ Public Class BoardConfigDialog
 
                     ' Store control reference
                     parameterControls(paramName) = checkBox
+
                 Else
                     ' Enum parameter - use dropdown
                     Dim comboBox As New ComboBox()
@@ -473,7 +480,7 @@ Public Class BoardConfigDialog
                     comboBox.Margin = New Padding(5, 10, 5, 10)
                     comboBox.DisplayMember = "Value"
                     comboBox.ValueMember = "Key"
-                    comboBox.Tag = paramName  ' Store parameter name in Tag
+                    comboBox.Tag = paramName ' Store parameter name in Tag
 
                     ' Populate options
                     For Each kvpOption As KeyValuePair(Of String, String) In boardConfigOptions(paramName)
@@ -519,6 +526,7 @@ Public Class BoardConfigDialog
 
                     ' Store control reference
                     parameterControls(paramName) = comboBox
+
                 End If
 
                 row += 1
@@ -526,7 +534,9 @@ Public Class BoardConfigDialog
 
             ' Update layout
             configPanel.PerformLayout()
+
             Debug.WriteLine($"[2025-08-14 22:32:36] Created UI with {parameterControls.Count} parameters for board {boardName} by Chamil1983")
+
         Catch ex As Exception
             MessageBox.Show($"Error creating configuration UI: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             Debug.WriteLine($"[2025-08-14 22:32:36] Error in CreateConfigurationUI: {ex.Message} by Chamil1983")
@@ -542,7 +552,17 @@ Public Class BoardConfigDialog
 
         Select Case paramName
             Case "CPUFreq"
-                If boardId.Contains("esp32c2") Then
+                ' ESP32 Dev Module specific frequencies from Main.txt
+                If boardId = "esp32" Then
+                    options.Add(New KeyValuePair(Of String, String)("240", "240MHz (WiFi/BT)"))
+                    options.Add(New KeyValuePair(Of String, String)("160", "160MHz (WiFi/BT)"))
+                    options.Add(New KeyValuePair(Of String, String)("80", "80MHz (WiFi/BT)"))
+                    options.Add(New KeyValuePair(Of String, String)("40", "40MHz (40MHz XTAL)"))
+                    options.Add(New KeyValuePair(Of String, String)("26", "26MHz (26MHz XTAL)"))
+                    options.Add(New KeyValuePair(Of String, String)("20", "20MHz (40MHz XTAL)"))
+                    options.Add(New KeyValuePair(Of String, String)("13", "13MHz (26MHz XTAL)"))
+                    options.Add(New KeyValuePair(Of String, String)("10", "10MHz (40MHz XTAL)"))
+                ElseIf boardId.Contains("esp32c2") Then
                     options.Add(New KeyValuePair(Of String, String)("120", "120MHz"))
                     options.Add(New KeyValuePair(Of String, String)("80", "80MHz"))
                     options.Add(New KeyValuePair(Of String, String)("40", "40MHz"))
@@ -562,25 +582,43 @@ Public Class BoardConfigDialog
                 End If
 
             Case "FlashMode"
+                ' ESP32 Dev Module supports both QIO and DIO from Main.txt
                 options.Add(New KeyValuePair(Of String, String)("qio", "QIO"))
                 options.Add(New KeyValuePair(Of String, String)("dio", "DIO"))
-                options.Add(New KeyValuePair(Of String, String)("qout", "QOUT"))
-                options.Add(New KeyValuePair(Of String, String)("dout", "DOUT"))
 
             Case "FlashFreq"
-                options.Add(New KeyValuePair(Of String, String)("80", "80MHz"))
-                options.Add(New KeyValuePair(Of String, String)("40", "40MHz"))
-                options.Add(New KeyValuePair(Of String, String)("20", "20MHz"))
+                ' ESP32 Dev Module specific flash frequencies from Main.txt
+                If boardId = "esp32" Then
+                    options.Add(New KeyValuePair(Of String, String)("80", "80MHz"))
+                    options.Add(New KeyValuePair(Of String, String)("40", "40MHz")) ' Default is 40MHz
+                Else
+                    options.Add(New KeyValuePair(Of String, String)("80", "80MHz"))
+                    options.Add(New KeyValuePair(Of String, String)("40", "40MHz"))
+                    options.Add(New KeyValuePair(Of String, String)("20", "20MHz"))
+                End If
 
             Case "PartitionScheme"
-                options.Add(New KeyValuePair(Of String, String)("default", "Default"))
-                options.Add(New KeyValuePair(Of String, String)("min_spiffs", "Minimal SPIFFS"))
-                options.Add(New KeyValuePair(Of String, String)("min_ota", "Minimal OTA"))
-                options.Add(New KeyValuePair(Of String, String)("huge_app", "Huge APP"))
-                options.Add(New KeyValuePair(Of String, String)("no_ota", "No OTA"))
+                If boardId.Contains("pico32") Then
+                    options.Add(New KeyValuePair(Of String, String)("default", "Default"))
+                    options.Add(New KeyValuePair(Of String, String)("min_spiffs", "Minimal SPIFFS (Large APPS with OTA)"))
+                    options.Add(New KeyValuePair(Of String, String)("no_ota", "No OTA (Large APP)"))
+                    options.Add(New KeyValuePair(Of String, String)("custom", "Custom"))
+
+                Else
+
+                    options.Add(New KeyValuePair(Of String, String)("default", "Default 4MB with spiffs (1.2MB APP/1.5MB SPIFFS)"))
+                    options.Add(New KeyValuePair(Of String, String)("min_spiffs", "Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)"))
+                    options.Add(New KeyValuePair(Of String, String)("minimal", "Minimal (1.3MB APP/700KB SPIFFS)"))
+                    options.Add(New KeyValuePair(Of String, String)("huge_app", "Huge APP (3MB No OTA/1MB SPIFFS)"))
+                    options.Add(New KeyValuePair(Of String, String)("no_ota", "No OTA (2MB APP/2MB SPIFFS)"))
+                    options.Add(New KeyValuePair(Of String, String)("noota_3g", "No OTA (1MB APP/3MB SPIFFS)"))
+                    options.Add(New KeyValuePair(Of String, String)("custom", "Custom"))
+                End If
+
 
             Case "UploadSpeed"
                 options.Add(New KeyValuePair(Of String, String)("921600", "921600"))
+                options.Add(New KeyValuePair(Of String, String)("512000", "512000"))
                 options.Add(New KeyValuePair(Of String, String)("460800", "460800"))
                 options.Add(New KeyValuePair(Of String, String)("230400", "230400"))
                 options.Add(New KeyValuePair(Of String, String)("115200", "115200"))
@@ -597,36 +635,48 @@ Public Class BoardConfigDialog
                 options.Add(New KeyValuePair(Of String, String)("disabled", "Disabled"))
                 options.Add(New KeyValuePair(Of String, String)("enabled", "Enabled"))
 
-            Case "USBMode"
-                options.Add(New KeyValuePair(Of String, String)("hwcdc", "Hardware CDC"))
-                options.Add(New KeyValuePair(Of String, String)("default", "Default"))
-
-            Case "CDCOnBoot", "MSCOnBoot", "DFUOnBoot"
-                options.Add(New KeyValuePair(Of String, String)("default", "Default"))
-                options.Add(New KeyValuePair(Of String, String)("enabled", "Enabled"))
-                options.Add(New KeyValuePair(Of String, String)("disabled", "Disabled"))
-
-            Case "UploadMode"
-                options.Add(New KeyValuePair(Of String, String)("default", "Default"))
-                options.Add(New KeyValuePair(Of String, String)("usb", "USB"))
-                options.Add(New KeyValuePair(Of String, String)("uart", "UART"))
-
-            Case "FlashSize"
-                options.Add(New KeyValuePair(Of String, String)("4M", "4MB"))
-                options.Add(New KeyValuePair(Of String, String)("8M", "8MB"))
-                options.Add(New KeyValuePair(Of String, String)("16M", "16MB"))
-
-            Case "LoopCore", "EventsCore"
-                options.Add(New KeyValuePair(Of String, String)("1", "Core 1"))
-                options.Add(New KeyValuePair(Of String, String)("0", "Core 0"))
-
             Case "EraseFlash"
                 options.Add(New KeyValuePair(Of String, String)("none", "None"))
                 options.Add(New KeyValuePair(Of String, String)("all", "All"))
 
             Case "JTAGAdapter"
+                options.Add(New KeyValuePair(Of String, String)("default", "Disabled"))
+                options.Add(New KeyValuePair(Of String, String)("external", "FTDI Adapter"))
+                options.Add(New KeyValuePair(Of String, String)("bridge", "ESP USB Bridge"))
+
+            Case "LoopCore"
+                options.Add(New KeyValuePair(Of String, String)("1", "Core 1"))
+                options.Add(New KeyValuePair(Of String, String)("0", "Core 0"))
+
+            Case "EventsCore"
+                options.Add(New KeyValuePair(Of String, String)("1", "Core 1"))
+                options.Add(New KeyValuePair(Of String, String)("0", "Core 0"))
+
+            Case "ZigbeeMode"
+                options.Add(New KeyValuePair(Of String, String)("default", "Disabled"))
+                options.Add(New KeyValuePair(Of String, String)("zczr", "Zigbee ZCZR (coordinator/router)"))
+
+                ' ESP32-S2/S3 specific parameters
+            Case "USBMode"
+                options.Add(New KeyValuePair(Of String, String)("hwcdc", "Hardware CDC"))
                 options.Add(New KeyValuePair(Of String, String)("default", "Default"))
-                options.Add(New KeyValuePair(Of String, String)("custom", "Custom"))
+
+            Case "CDCOnBoot", "MSCOnBoot", "DFUOnBoot"
+                options.Add(New KeyValuePair(Of String, String)("default", "Disabled"))
+                options.Add(New KeyValuePair(Of String, String)("enabled", "Enabled"))
+
+
+            Case "UploadMode"
+                options.Add(New KeyValuePair(Of String, String)("default", "UART0"))
+                options.Add(New KeyValuePair(Of String, String)("cdc", "Internal USB"))
+
+
+            Case "FlashSize"
+                options.Add(New KeyValuePair(Of String, String)("4M", "4MB"))
+                options.Add(New KeyValuePair(Of String, String)("8M", "8MB"))
+                options.Add(New KeyValuePair(Of String, String)("16M", "16MB"))
+                options.Add(New KeyValuePair(Of String, String)("32M", "32MB"))
+
         End Select
 
         Return options
@@ -723,6 +773,7 @@ Public Class BoardConfigDialog
 
             ' Update the FQBN based on the current parameters
             UpdateFQBN()
+
         Catch ex As Exception
             MessageBox.Show($"Error updating parameters: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             Debug.WriteLine($"[2025-08-14 22:32:36] Error in UpdateParametersFromUI: {ex.Message} by Chamil1983")
@@ -785,6 +836,7 @@ Public Class BoardConfigDialog
                     Debug.WriteLine($"[2025-08-14 22:32:36] Updated FQBN: {currentFQBN} by Chamil1983")
                 End If
             End If
+
         Catch ex As Exception
             MessageBox.Show($"Error updating FQBN: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             Debug.WriteLine($"[2025-08-14 22:32:36] Error in UpdateFQBN: {ex.Message} by Chamil1983")
@@ -825,6 +877,7 @@ Public Class BoardConfigDialog
 
             ' Update the text box
             txtFQBN.Text = fqbnText.ToString()
+
         Catch ex As Exception
             Debug.WriteLine($"[2025-08-14 22:32:36] Error in UpdateFQBNText: {ex.Message} by Chamil1983")
         End Try
@@ -849,6 +902,7 @@ Public Class BoardConfigDialog
 
             ' Fall back to parameter value
             Return paramValue
+
         Catch ex As Exception
             Debug.WriteLine($"[2025-08-14 22:32:36] Error in GetDisplayValueForParam: {ex.Message} by Chamil1983")
             Return paramValue
@@ -858,7 +912,7 @@ Public Class BoardConfigDialog
     Private Sub btnResetDefaults_Click(sender As Object, e As EventArgs)
         Try
             If MessageBox.Show("Reset all settings to default values?", "Reset Confirmation",
-                            MessageBoxButtons.YesNo, MessageBoxIcon.Question) = DialogResult.Yes Then
+                              MessageBoxButtons.YesNo, MessageBoxIcon.Question) = DialogResult.Yes Then
 
                 ' Reset parameters to defaults based on the selected board
                 ' Get the default FQBN for this board without any custom parameters
@@ -909,6 +963,7 @@ Public Class BoardConfigDialog
 
                     If TypeOf control Is ComboBox Then
                         Dim comboBox = DirectCast(control, ComboBox)
+
                         For i As Integer = 0 To comboBox.Items.Count - 1
                             Dim item = DirectCast(comboBox.Items(i), KeyValuePair(Of String, String))
                             If item.Key = paramValue Then
@@ -924,6 +979,7 @@ Public Class BoardConfigDialog
                             Dim item = DirectCast(comboBox.Items(0), KeyValuePair(Of String, String))
                             currentParameters(paramName) = item.Key
                         End If
+
                     ElseIf TypeOf control Is CheckBox Then
                         Dim checkBox = DirectCast(control, CheckBox)
                         checkBox.Checked = (paramValue = "enabled")
@@ -940,6 +996,7 @@ Public Class BoardConfigDialog
                 MessageBox.Show("Board configuration has been reset to default values.", "Reset Complete",
                                MessageBoxButtons.OK, MessageBoxIcon.Information)
             End If
+
         Catch ex As Exception
             MessageBox.Show($"Error resetting defaults: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             Debug.WriteLine($"[2025-08-14 22:32:36] Error in btnResetDefaults_Click: {ex.Message} by Chamil1983")
@@ -956,6 +1013,7 @@ Public Class BoardConfigDialog
 
             ' Filter parameters to only include supported ones
             Dim filteredParams As New Dictionary(Of String, String)
+
             For Each kvp In currentParameters
                 If supportedMenus.Contains(kvp.Key) Then
                     filteredParams(kvp.Key) = kvp.Value
@@ -973,10 +1031,11 @@ Public Class BoardConfigDialog
 
             ' Show success message
             MessageBox.Show($"Board configuration for {boardName} has been saved successfully.",
-                          "Configuration Saved", MessageBoxButtons.OK, MessageBoxIcon.Information)
+                           "Configuration Saved", MessageBoxButtons.OK, MessageBoxIcon.Information)
 
             ' Log the save operation
             Debug.WriteLine($"[2025-08-14 22:32:36] Board configuration saved for {boardName} by Chamil1983")
+
         Catch ex As Exception
             MessageBox.Show($"Error saving configuration: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             Debug.WriteLine($"[2025-08-14 22:32:36] Error in btnSave_Click: {ex.Message} by Chamil1983")
@@ -1009,6 +1068,7 @@ Public Class BoardConfigDialog
 
             ' Log the reload operation
             Debug.WriteLine($"[2025-08-14 22:32:36] Board configurations reloaded by Chamil1983")
+
         Catch ex As Exception
             MessageBox.Show($"Error reloading configurations: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             Debug.WriteLine($"[2025-08-14 22:32:36] Error in btnReload_Click: {ex.Message} by Chamil1983")
@@ -1025,6 +1085,7 @@ Public Class BoardConfigDialog
                 ' Log the selection change
                 Debug.WriteLine($"[2025-08-14 22:32:36] Selected board changed to {boardName} by Chamil1983")
             End If
+
         Catch ex As Exception
             MessageBox.Show($"Error changing board selection: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             Debug.WriteLine($"[2025-08-14 22:32:36] Error in cmbBoardType_SelectedIndexChanged: {ex.Message} by Chamil1983")
@@ -1037,6 +1098,7 @@ Public Class BoardConfigDialog
                 ' Update FQBN text when switching to FQBN tab
                 UpdateFQBNText()
             End If
+
         Catch ex As Exception
             Debug.WriteLine($"[2025-08-14 22:32:36] Error in tabControl_SelectedIndexChanged: {ex.Message} by Chamil1983")
         End Try
@@ -1076,6 +1138,7 @@ Public Class BoardConfigDialog
 
             MessageBox.Show("FQBN applied successfully. Please review the settings in the Board Configuration tab.",
                            "FQBN Applied", MessageBoxButtons.OK, MessageBoxIcon.Information)
+
         Catch ex As Exception
             MessageBox.Show($"Error applying FQBN: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             Debug.WriteLine($"[2025-08-14 22:32:36] Error in btnSaveFQBN_Click: {ex.Message} by Chamil1983")
@@ -1098,11 +1161,12 @@ Public Class BoardConfigDialog
 
                     ' Ask if user wants to reload configurations
                     If MessageBox.Show("Would you like to reload board configurations from the selected file?",
-                                    "Reload Configurations", MessageBoxButtons.YesNo, MessageBoxIcon.Question) = DialogResult.Yes Then
+                                      "Reload Configurations", MessageBoxButtons.YesNo, MessageBoxIcon.Question) = DialogResult.Yes Then
                         ReloadBoardsFile()
                     End If
                 End If
             End Using
+
         Catch ex As Exception
             MessageBox.Show($"Error selecting boards file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             Debug.WriteLine($"[2025-08-14 22:32:36] Error in btnBrowseBoardsFile_Click: {ex.Message} by Chamil1983")
@@ -1118,7 +1182,7 @@ Public Class BoardConfigDialog
             ' Check if the file exists
             If Not File.Exists(boardManager.BoardsFilePath) Then
                 MessageBox.Show("The specified boards.txt file doesn't exist. Please select a valid file.",
-                              "File Not Found", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                               "File Not Found", MessageBoxButtons.OK, MessageBoxIcon.Error)
                 Return
             End If
 
@@ -1148,9 +1212,11 @@ Public Class BoardConfigDialog
                            "Reload Complete", MessageBoxButtons.OK, MessageBoxIcon.Information)
 
             Debug.WriteLine($"[2025-08-14 22:32:36] Board configurations reloaded from {boardManager.BoardsFilePath} by Chamil1983")
+
         Catch ex As Exception
             MessageBox.Show($"Error reloading boards file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             Debug.WriteLine($"[2025-08-14 22:32:36] Error in ReloadBoardsFile: {ex.Message} by Chamil1983")
         End Try
     End Sub
+
 End Class

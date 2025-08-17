@@ -356,11 +356,18 @@ Public Class EnhancedSettingsForm
 
         ' Add standard ESP32 boards
         cmbDefaultBoard.Items.Add("ESP32 Dev Module")
+        cmbDefaultBoard.Items.Add("ESP32 Wrover Module")
         cmbDefaultBoard.Items.Add("ESP32 Wrover Kit")
-        cmbDefaultBoard.Items.Add("ESP32 Pico Kit")
+        cmbDefaultBoard.Items.Add("ESP32 PICO-D4")
         cmbDefaultBoard.Items.Add("ESP32-S2 Dev Module")
         cmbDefaultBoard.Items.Add("ESP32-S3 Dev Module")
+        cmbDefaultBoard.Items.Add("ESP32-C2 Dev Module")
         cmbDefaultBoard.Items.Add("ESP32-C3 Dev Module")
+        cmbDefaultBoard.Items.Add("ESP32-C6 Dev Module")
+        cmbDefaultBoard.Items.Add("ESP32-C5 Dev Module")
+        cmbDefaultBoard.Items.Add("ESP32-H2 Dev Module")
+        cmbDefaultBoard.Items.Add("ESP32-P4 Dev Module")
+
 
         ' Add any custom boards from config
         For Each boardName In boardManager.GetBoardNames()
@@ -377,9 +384,10 @@ Public Class EnhancedSettingsForm
         ' Add standard partition schemes
         cmbDefaultPartition.Items.Add("default")
         cmbDefaultPartition.Items.Add("min_spiffs")
-        cmbDefaultPartition.Items.Add("min_ota")
+        cmbDefaultPartition.Items.Add("minimal")
         cmbDefaultPartition.Items.Add("huge_app")
         cmbDefaultPartition.Items.Add("custom")
+
 
         ' Add any custom partition schemes
         For Each scheme In boardManager.GetCustomPartitions()
