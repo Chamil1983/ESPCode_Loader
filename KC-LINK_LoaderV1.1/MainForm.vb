@@ -1,4 +1,4 @@
-﻿Imports System
+Imports System
 Imports System.Collections.Generic
 Imports System.ComponentModel
 Imports System.Diagnostics
@@ -10,7 +10,8 @@ Imports System.Text.RegularExpressions
 Imports System.Threading
 Imports System.Threading.Tasks
 Imports System.Windows.Forms
-Imports KC_LINK_LoaderV1._1
+Imports KC_LINK_LoaderV1
+Imports KC_LINK_LoaderV1._1.KC_LINK_LoaderV1
 
 
 Public Class MainForm
@@ -60,7 +61,6 @@ Public Class MainForm
     Private WithEvents btnRefreshPorts As Button
     Private WithEvents cmbSerialPort As ComboBox
     Private WithEvents cmbBoardType As ComboBox
-    Private WithEvents cmbPartitionOption As ComboBox
     Private WithEvents btnConfigPath As Button
     Private WithEvents buildProgressBar As ProgressBar
     Private WithEvents flashUsageBar As ColoredProgressBar
@@ -73,7 +73,6 @@ Public Class MainForm
     Private WithEvents lblFileCount As Label
     Private WithEvents lblProjectType As Label
     Private WithEvents lblCodeLines As Label
-    Private WithEvents lblPartitionScheme As Label
     Private WithEvents lblStatusIndicator As Label
     Private WithEvents toolStripStatus As StatusStrip
     Private WithEvents toolStripStatusLabel As ToolStripStatusLabel
@@ -128,7 +127,6 @@ Public Class MainForm
 
         ' Populate board types combobox
         PopulateBoardComboBox()
-        PopulatePartitionSchemes()
 
         ' Set default values for controls
         SetDefaults()
@@ -137,7 +135,7 @@ Public Class MainForm
         LoadSettings()
 
         ' Log startup info
-        LogMessage($"Application started by Chamil1983 at UTC 2025-08-11 20:47:30")
+        LogMessage($"Application started by Chamil1983 at UTC 2025-08-23 00:08:55")
     End Sub
 
     Private Sub InitializeComponent()
@@ -162,14 +160,13 @@ Public Class MainForm
         Dim topPanel As New TableLayoutPanel()
         topPanel.Dock = DockStyle.Fill
         topPanel.ColumnCount = 3
-        topPanel.RowCount = 5  ' Added an extra row for partition scheme
+        topPanel.RowCount = 4  ' Reduced by 1 row (removed partition scheme)
         topPanel.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 25))
         topPanel.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 50))
         topPanel.ColumnStyles.Add(New ColumnStyle(SizeType.Percent, 25))
         topPanel.RowStyles.Add(New RowStyle(SizeType.Absolute, 30))  ' Project path
         topPanel.RowStyles.Add(New RowStyle(SizeType.Absolute, 30))  ' Board type
         topPanel.RowStyles.Add(New RowStyle(SizeType.Absolute, 30))  ' Serial port
-        topPanel.RowStyles.Add(New RowStyle(SizeType.Absolute, 30))  ' Partition scheme
         topPanel.RowStyles.Add(New RowStyle(SizeType.Absolute, 50))  ' Action buttons
         topPanel.Margin = New Padding(0, 0, 0, 10)
 
@@ -222,18 +219,6 @@ Public Class MainForm
         btnRefreshPorts.Text = "Refresh"
         btnRefreshPorts.Dock = DockStyle.Fill
         btnRefreshPorts.Margin = New Padding(3, 3, 10, 3)
-
-        ' Partition scheme
-        lblPartitionScheme = New Label()
-        lblPartitionScheme.Text = "Partition Scheme:"
-        lblPartitionScheme.TextAlign = ContentAlignment.MiddleRight
-        lblPartitionScheme.Dock = DockStyle.Fill
-        lblPartitionScheme.Margin = New Padding(3, 5, 3, 5)
-
-        cmbPartitionOption = New ComboBox()
-        cmbPartitionOption.DropDownStyle = ComboBoxStyle.DropDownList
-        cmbPartitionOption.Dock = DockStyle.Fill
-        cmbPartitionOption.Margin = New Padding(3, 5, 3, 5)
 
         ' Status indicator label
         lblStatusIndicator = New Label()
@@ -339,10 +324,7 @@ Public Class MainForm
         topPanel.Controls.Add(lblSerialPort, 0, 2)
         topPanel.Controls.Add(cmbSerialPort, 1, 2)
         topPanel.Controls.Add(btnRefreshPorts, 2, 2)
-        topPanel.Controls.Add(lblPartitionScheme, 0, 3)
-        topPanel.Controls.Add(cmbPartitionOption, 1, 3)
-        topPanel.Controls.Add(lblStatusIndicator, 2, 3)
-        topPanel.Controls.Add(actionPanel, 0, 4)
+        topPanel.Controls.Add(actionPanel, 0, 3)
         topPanel.SetColumnSpan(actionPanel, 3)
 
         ' Middle panel - Output and stats
@@ -550,7 +532,6 @@ Public Class MainForm
         AddHandler btnZipUpload.Click, AddressOf btnZipUpload_Click
         AddHandler btnBinaryUpload.Click, AddressOf btnBinaryUpload_Click
         AddHandler cmbBoardType.SelectedIndexChanged, AddressOf cmbBoardType_SelectedIndexChanged
-        AddHandler cmbPartitionOption.SelectedIndexChanged, AddressOf cmbPartitionOption_SelectedIndexChanged
         AddHandler MyBase.FormClosing, AddressOf MainForm_FormClosing
     End Sub
 
@@ -609,7 +590,7 @@ Public Class MainForm
     End Sub
 
     Private Sub MainForm_Load(sender As Object, e As EventArgs)
-        LogMessage("Application started at 2025-08-11 20:47:30")
+        LogMessage("Application started at 2025-08-23 00:08:55")
         UpdateStatusBar("Checking Arduino CLI configuration...")
         CheckArduinoCLI()
         RefreshPortList()
@@ -645,49 +626,6 @@ Public Class MainForm
         End If
     End Sub
 
-    Private Sub PopulatePartitionSchemes()
-        cmbPartitionOption.Items.Clear()
-
-
-        ' Gather info for background thread
-        Dim selectedBoard As String = ""
-
-        ' Get the FQBN and apply the selected partition scheme
-        Dim fqbn As String = boardConfigManager.GetFQBN(selectedBoard)
-
-
-        ' Validate that FQBN is compatible with board type
-        Dim boardId = boardConfigManager.GetBoardId(selectedBoard)
-        If (boardId.Contains("pico32")) Then
-            ' Add standard partition schemes
-            cmbPartitionOption.Items.Add("default")
-            cmbPartitionOption.Items.Add("min_spiffs")
-            cmbPartitionOption.Items.Add("no_ota")
-            cmbPartitionOption.Items.Add("custom")
-
-        Else
-            ' Add standard partition schemes
-            cmbPartitionOption.Items.Add("default")
-            cmbPartitionOption.Items.Add("min_spiffs")
-            cmbPartitionOption.Items.Add("minimal")
-            cmbPartitionOption.Items.Add("huge_app")
-            cmbPartitionOption.Items.Add("custom")
-
-        End If
-
-
-
-        ' Add any custom partition schemes
-        For Each partitionScheme In boardConfigManager.GetCustomPartitions()
-            If Not cmbPartitionOption.Items.Contains(partitionScheme) Then
-                cmbPartitionOption.Items.Add(partitionScheme)
-            End If
-        Next
-
-        ' Set default selection
-        cmbPartitionOption.SelectedIndex = 0
-    End Sub
-
     Private Sub SetDefaults()
         txtCompilerOutput.ReadOnly = True
         buildProgressBar.Minimum = 0
@@ -696,7 +634,7 @@ Public Class MainForm
 
         ' Default Arduino CLI location
         If String.IsNullOrEmpty(My.Settings.ArduinoCliPath) Then
-            My.Settings.ArduinoCliPath = Path.Combine(Application.StartupPath, "C:\Users\chami\bin\arduino-cli.exe")
+            My.Settings.ArduinoCliPath = Path.Combine(Application.StartupPath, "C:\Users\gen_rms_testroom\Documents\Arduino\Arduino CLI\arduino-cli.exe")
             My.Settings.Save()
         End If
     End Sub
@@ -799,7 +737,7 @@ Public Class MainForm
         Dim configDialog As New BoardConfigDialog(boardConfigManager, cmbBoardType.SelectedItem.ToString())
 
         If configDialog.ShowDialog() = DialogResult.OK Then
-            LogMessage($"[2025-08-14 10:55:29] Board configuration updated by Chamil1983")
+            LogMessage($"[2025-08-23 00:08:55] Board configuration updated by Chamil1983")
             UpdateStatusBar("Board configuration updated")
 
             ' Refresh board list to show any changes
@@ -816,37 +754,28 @@ Public Class MainForm
                 End If
             End If
 
-            ' Update partition schemes based on the selected board
-            RefreshPartitionSchemes()
-
-            ' Get the partition scheme from settings to maintain consistency
-            If Not String.IsNullOrEmpty(My.Settings.LastUsedPartition) Then
-                Dim partitionIndex = cmbPartitionOption.Items.IndexOf(My.Settings.LastUsedPartition)
-                If partitionIndex >= 0 Then
-                    RemoveHandler cmbPartitionOption.SelectedIndexChanged, AddressOf cmbPartitionOption_SelectedIndexChanged
-                    cmbPartitionOption.SelectedIndex = partitionIndex
-                    AddHandler cmbPartitionOption.SelectedIndexChanged, AddressOf cmbPartitionOption_SelectedIndexChanged
-                End If
-            End If
-
             ' Save the updated configuration to settings
             SaveBoardSettings()
         End If
     End Sub
 
-
     Private Sub ApplyBoardConfiguration()
         ' Ensure the current board configuration is saved and applied
         If cmbBoardType.SelectedItem IsNot Nothing Then
             Dim selectedBoard = cmbBoardType.SelectedItem.ToString()
-            Dim selectedPartition = If(cmbPartitionOption.SelectedItem IsNot Nothing, cmbPartitionOption.SelectedItem.ToString(), "default")
+
+            ' Use the partition scheme directly from board settings
+            Dim selectedPartition = My.Settings.LastUsedPartition
+            If String.IsNullOrEmpty(selectedPartition) Then
+                selectedPartition = boardConfigManager.GetDefaultPartitionForBoard(selectedBoard)
+            End If
 
             ' Save current board and partition settings
             My.Settings.LastUsedBoard = selectedBoard
             My.Settings.LastUsedPartition = selectedPartition
             My.Settings.Save()
 
-            LogMessage($"[2025-08-16 19:46:30] Applied configuration for {selectedBoard} with partition {selectedPartition} by Chamil1983")
+            LogMessage($"[2025-08-23 00:08:55] Applied configuration for {selectedBoard} with partition {selectedPartition} by Chamil1983")
 
             ' Make sure the FQBN reflects this combination
             Dim fqbn = boardConfigManager.GetFQBN(selectedBoard)
@@ -873,11 +802,9 @@ Public Class MainForm
                 fqbn = boardConfigManager.ApplyCustomPartitionFile(fqbn)
             End If
 
-            LogMessage($"[2025-08-16 19:46:30] Final FQBN for compile/upload: {fqbn}")
+            LogMessage($"[2025-08-23 00:08:55] Final FQBN for compile/upload: {fqbn}")
         End If
     End Sub
-
-
 
     Private Sub RefreshBoardList()
         ' Store the currently selected item
@@ -914,118 +841,17 @@ Public Class MainForm
         End If
     End Sub
 
-    Private Sub RefreshPartitionSchemes()
-        ' Store the currently selected item
-        Dim currentSelection = If(cmbPartitionOption.SelectedItem IsNot Nothing, cmbPartitionOption.SelectedItem.ToString(), "")
-
-        ' Clear and repopulate the partition schemes
-        cmbPartitionOption.Items.Clear()
-
-        ' Gather info for background thread
-        Dim selectedBoard As String = ""
-
-
-        ' Get the FQBN and apply the selected partition scheme
-        Dim fqbn As String = boardConfigManager.GetFQBN(selectedBoard)
-
-
-        ' Validate that FQBN is compatible with board type
-        Dim boardId = boardConfigManager.GetBoardId(selectedBoard)
-        If (boardId.Contains("pico32")) Then
-            ' Add standard partition schemes
-            cmbPartitionOption.Items.Add("default")
-            cmbPartitionOption.Items.Add("min_spiffs")
-            cmbPartitionOption.Items.Add("no_ota")
-            cmbPartitionOption.Items.Add("custom")
-
-        Else
-            ' Add standard partition schemes
-            cmbPartitionOption.Items.Add("default")
-            cmbPartitionOption.Items.Add("min_spiffs")
-            cmbPartitionOption.Items.Add("minimal")
-            cmbPartitionOption.Items.Add("huge_app")
-            cmbPartitionOption.Items.Add("custom")
-
-        End If
-
-
-
-
-
-        ' Add any custom partition schemes found
-        For Each partitionScheme In boardConfigManager.GetCustomPartitions()
-            If Not cmbPartitionOption.Items.Contains(partitionScheme) Then
-                cmbPartitionOption.Items.Add(partitionScheme)
-            End If
-        Next
-
-        ' Try to restore the previous selection
-        Dim index = cmbPartitionOption.Items.IndexOf(currentSelection)
-        If index >= 0 Then
-            cmbPartitionOption.SelectedIndex = index
-        Else
-            cmbPartitionOption.SelectedIndex = 0
-        End If
-    End Sub
-
     Private Sub cmbBoardType_SelectedIndexChanged(sender As Object, e As EventArgs)
         If cmbBoardType.SelectedItem IsNot Nothing Then
-            ' Update the partition scheme based on the selected board
+            ' Update board selection settings
             Dim selectedBoard = cmbBoardType.SelectedItem.ToString()
-            Dim defaultPartition = boardConfigManager.GetDefaultPartitionForBoard(selectedBoard)
 
-            ' Only update partition selection if there's a valid default partition
-            If Not String.IsNullOrEmpty(defaultPartition) Then
-                Dim index = cmbPartitionOption.Items.IndexOf(defaultPartition)
-                If index >= 0 Then
-                    ' Remove event handler temporarily to avoid recursive calls
-                    RemoveHandler cmbPartitionOption.SelectedIndexChanged, AddressOf cmbPartitionOption_SelectedIndexChanged
-
-                    cmbPartitionOption.SelectedIndex = index
-
-                    ' Restore event handler
-                    AddHandler cmbPartitionOption.SelectedIndexChanged, AddressOf cmbPartitionOption_SelectedIndexChanged
-                End If
-            End If
-
-            LogMessage($"[2025-08-12 12:48:36] Selected board: {selectedBoard}, default partition: {defaultPartition} by Chamil1983")
+            LogMessage($"[2025-08-23 00:08:55] Selected board: {selectedBoard} by Chamil1983")
             UpdateStatusBar($"Selected board: {selectedBoard}")
 
             ' Save the current selection to settings
             My.Settings.LastUsedBoard = selectedBoard
-            My.Settings.LastUsedPartition = If(cmbPartitionOption.SelectedItem IsNot Nothing,
-                                              cmbPartitionOption.SelectedItem.ToString(),
-                                              defaultPartition)
             My.Settings.Save()
-        End If
-    End Sub
-
-    Private Sub cmbPartitionOption_SelectedIndexChanged(sender As Object, e As EventArgs)
-        Dim selectedPartition = cmbPartitionOption.SelectedItem.ToString()
-        LogMessage($"[2025-08-12 11:36:18] Selected partition scheme: {selectedPartition}")
-
-        ' Save the selection immediately to keep it in sync with board config dialog
-        My.Settings.LastUsedPartition = selectedPartition
-        My.Settings.Save()
-
-        ' If "custom" is selected, prompt for custom partition file
-        If selectedPartition = "custom" Then
-            Using openFileDialog As New OpenFileDialog()
-                openFileDialog.Title = "Select Custom Partition CSV File"
-                openFileDialog.Filter = "Partition Files|*.csv|All Files|*.*"
-
-                If openFileDialog.ShowDialog() = DialogResult.OK Then
-                    ' Set custom partition file
-                    boardConfigManager.SetCustomPartitionFile(openFileDialog.FileName)
-                    LogMessage("[2025-08-12 11:36:18] Custom partition file selected: " & Path.GetFileName(openFileDialog.FileName))
-                    UpdateStatusBar("Custom partition file loaded")
-                Else
-                    ' User cancelled, select default
-                    cmbPartitionOption.SelectedIndex = 0
-                    My.Settings.LastUsedPartition = "default"
-                    My.Settings.Save()
-                End If
-            End Using
         End If
     End Sub
 
@@ -1139,38 +965,34 @@ Public Class MainForm
             ' Start upload in background
             workerThread.RunWorkerAsync("upload")
 
-            LogMessage($"[2025-08-11 20:47:30] Started upload to {cmbSerialPort.SelectedItem.ToString()} by Chamil1983")
+            LogMessage($"[2025-08-23 00:08:55] Started upload to {cmbSerialPort.SelectedItem.ToString()} by Chamil1983")
         End If
     End Sub
 
     ' NEW: Handler for Zip Upload button
     Private Sub btnZipUpload_Click(sender As Object, e As EventArgs)
         ' Open the Zip Upload form
-        Dim zipUploadForm As New KC_LINK_LoaderV1._1.ZipUploadForm()
+        Dim zipUploadForm As New KC_LINK_LoaderV1.ZipUploadForm()
         zipUploadForm.ShowDialog()
     End Sub
 
     ' NEW: Handler for Binary Upload button
     Private Sub btnBinaryUpload_Click(sender As Object, e As EventArgs)
         ' Open the Binary Upload form
-        Dim binaryUploadForm As New KC_LINK_LoaderV1._1.BinaryUploadForm()
+        Dim binaryUploadForm As New KC_LINK_LoaderV1.BinaryUploadForm()
         binaryUploadForm.ShowDialog()
     End Sub
 
     ' NEW: Handler for Binary Manager menu item
     Private Sub mnuBinaryManager_Click(sender As Object, e As EventArgs)
-        Dim binaryManager As New KC_LINK_LoaderV1._1.BinaryManagerForm()
+        Dim binaryManager As New KC_LINK_LoaderV1.BinaryManagerForm()
         binaryManager.ShowDialog()
     End Sub
 
     Private Sub SaveBoardSettings()
-        ' Save current board and partition settings
+        ' Save current board settings
         If cmbBoardType.SelectedItem IsNot Nothing Then
             My.Settings.LastUsedBoard = cmbBoardType.SelectedItem.ToString()
-        End If
-
-        If cmbPartitionOption.SelectedItem IsNot Nothing Then
-            My.Settings.LastUsedPartition = cmbPartitionOption.SelectedItem.ToString()
         End If
 
         ' Save boards.txt path
@@ -1183,7 +1005,7 @@ Public Class MainForm
 
         My.Settings.Save()
 
-        LogMessage($"[2025-08-11 20:47:30] Board settings saved by Chamil1983")
+        LogMessage($"[2025-08-23 00:08:55] Board settings saved by Chamil1983")
     End Sub
 
     Private Sub SaveRecentProject(path As String)
@@ -1252,7 +1074,7 @@ Public Class MainForm
             End If
         Catch ex As Exception
             ' Ignore errors pulsing progress bar
-            Debug.WriteLine($"[2025-08-11 20:47:30] Error pulsing progress bar: {ex.Message}")
+            Debug.WriteLine($"[2025-08-23 00:08:55] Error pulsing progress bar: {ex.Message}")
         End Try
     End Sub
 
@@ -1272,7 +1094,10 @@ Public Class MainForm
         Dim selectedPartition As String = ""
         Me.Invoke(Sub()
                       selectedBoard = If(cmbBoardType.SelectedItem IsNot Nothing, cmbBoardType.SelectedItem.ToString(), "KC-Link PRO A8 (Default)")
-                      selectedPartition = If(cmbPartitionOption.SelectedItem IsNot Nothing, cmbPartitionOption.SelectedItem.ToString(), "default")
+                      selectedPartition = My.Settings.LastUsedPartition
+                      If String.IsNullOrEmpty(selectedPartition) Then
+                          selectedPartition = boardConfigManager.GetDefaultPartitionForBoard(selectedBoard)
+                      End If
                       If isUpload Then
                           selectedPort = If(cmbSerialPort.SelectedItem IsNot Nothing, cmbSerialPort.SelectedItem.ToString(), "")
                       End If
@@ -1309,9 +1134,9 @@ Public Class MainForm
             End If
         End If
 
-        worker.ReportProgress(5, $"[2025-08-14 10:34:34] Using FQBN: {fqbn}")
-        worker.ReportProgress(5, $"[2025-08-14 10:34:34] Using partition scheme: {selectedPartition}")
-        worker.ReportProgress(5, $"[2025-08-14 10:34:34] Operation started by Chamil1983")
+        worker.ReportProgress(5, $"[2025-08-23 00:08:55] Using FQBN: {fqbn}")
+        worker.ReportProgress(5, $"[2025-08-23 00:08:55] Using partition scheme: {selectedPartition}")
+        worker.ReportProgress(5, $"[2025-08-23 00:08:55] Operation started by Chamil1983")
 
         Dim arguments As String
         If isUpload Then
@@ -1320,7 +1145,7 @@ Public Class MainForm
             arguments = $"compile -v --fqbn {fqbn} ""{projectPath}"""
         End If
 
-        worker.ReportProgress(5, $"[2025-08-14 10:34:34] Command: {My.Settings.ArduinoCliPath} {arguments}")
+        worker.ReportProgress(5, $"[2025-08-23 00:08:55] Command: {My.Settings.ArduinoCliPath} {arguments}")
 
         Dim process As New Process()
         process.StartInfo.FileName = My.Settings.ArduinoCliPath
@@ -1401,7 +1226,7 @@ Public Class MainForm
                 If worker.CancellationPending Then
                     process.Kill()
                     e.Cancel = True
-                    safeReportProgress(0, $"[2025-08-14 10:34:34] Process canceled by Chamil1983")
+                    safeReportProgress(0, $"[2025-08-23 00:08:55] Process canceled by Chamil1983")
                     Exit While
                 End If
 
@@ -1430,7 +1255,7 @@ Public Class MainForm
             If process.ExitCode = 0 Then
                 safeReportProgress(100, If(isUpload, "Upload completed successfully!", "Compilation completed successfully!"))
                 safeReportProgress(100, $"Completed in {duration.TotalSeconds:F1} seconds")
-                safeReportProgress(100, $"[2025-08-14 10:34:34] Operation completed successfully by Chamil1983")
+                safeReportProgress(100, $"[2025-08-23 00:08:55] Operation completed successfully by Chamil1983")
 
                 ' Add to compilation stats
                 hardwareStats.AddCompilation(Path.GetFileName(projectPath), True, duration)
@@ -1442,7 +1267,7 @@ Public Class MainForm
             Else
                 safeReportProgress(0, If(isUpload, "Upload failed with errors", "Compilation failed with errors"))
                 safeReportProgress(0, $"Process exited with code: {process.ExitCode}")
-                safeReportProgress(0, $"[2025-08-14 10:34:34] Operation failed with exit code {process.ExitCode} by Chamil1983")
+                safeReportProgress(0, $"[2025-08-23 00:08:55] Operation failed with exit code {process.ExitCode} by Chamil1983")
 
                 ' Add to compilation stats
                 hardwareStats.AddCompilation(Path.GetFileName(projectPath), False, duration)
@@ -1467,7 +1292,7 @@ Public Class MainForm
         Catch ex As Exception
             processExited = True
             safeReportProgress(0, "Error: " & ex.Message)
-            safeReportProgress(0, $"[2025-08-14 10:34:34] Process error: {ex.Message} by Chamil1983")
+            safeReportProgress(0, $"[2025-08-23 00:08:55] Process error: {ex.Message} by Chamil1983")
             builderExitCode = -1
 
             ' Update UI with error status
@@ -1478,7 +1303,6 @@ Public Class MainForm
                       End Sub)
         End Try
     End Sub
-
 
     Private Sub OnProcessOutputDataReceived(sender As Object, e As DataReceivedEventArgs)
         If Not String.IsNullOrEmpty(e.Data) Then
@@ -1619,7 +1443,7 @@ Public Class MainForm
                 End If
             Catch ex As Exception
                 ' Ignore errors updating progress UI
-                Debug.WriteLine($"[2025-08-11 20:51:42] Error updating progress: {ex.Message}")
+                Debug.WriteLine($"[2025-08-23 00:15:10] Error updating progress: {ex.Message}")
             End Try
         End If
 
@@ -1694,7 +1518,7 @@ Public Class MainForm
                 lblStatusIndicator.Text = "Success"
                 lblStatusIndicator.ForeColor = Color.Green
                 UpdateStatusBar("Operation completed successfully")
-                LogMessage($"[2025-08-11 20:51:42] Compilation/Upload completed successfully by Chamil1983")
+                LogMessage($"[2025-08-23 00:15:10] Compilation/Upload completed successfully by Chamil1983")
 
                 ' Make sure progress bars are at 100% on success
                 If buildProgressBar.InvokeRequired Then
@@ -1727,7 +1551,7 @@ Public Class MainForm
                 lblStatusIndicator.Text = "Failed"
                 lblStatusIndicator.ForeColor = Color.Red
                 UpdateStatusBar("Operation failed")
-                LogMessage($"[2025-08-11 20:51:42] Compilation/Upload failed by Chamil1983")
+                LogMessage($"[2025-08-23 00:15:10] Compilation/Upload failed by Chamil1983")
 
                 ' Update statistics UI without animation
                 UpdateStatisticsUI()
@@ -1746,7 +1570,7 @@ Public Class MainForm
             Dim projectName As String = Path.GetFileName(projectNameOrPath)
 
             ' Extract build path from compilation output
-            buildFolderPath = KC_LINK_LoaderV1._1.BinaryExporter.ExtractBuildPathFromOutput(compilationOutput)
+            buildFolderPath = KC_LINK_LoaderV1.BinaryExporter.ExtractBuildPathFromOutput(compilationOutput)
 
             If String.IsNullOrEmpty(buildFolderPath) Then
                 AppendToOutput("Could not determine build folder path from compilation output.")
@@ -1757,7 +1581,7 @@ Public Class MainForm
             Dim exportPath As String = Path.Combine(projectPath, "export")
 
             ' Export binaries
-            Dim success As Boolean = KC_LINK_LoaderV1._1.BinaryExporter.ExportBinaries(
+            Dim success As Boolean = KC_LINK_LoaderV1.BinaryExporter.ExportBinaries(
                 buildFolderPath,
                 projectName,
                 exportPath,
@@ -1790,14 +1614,14 @@ Public Class MainForm
                 End If
 
                 ' Show the export complete dialog
-                Dim dialog As New KC_LINK_LoaderV1._1.ExportCompleteDialog(exportPath, exportedFiles, zipPath)
+                Dim dialog As New KC_LINK_LoaderV1.ExportCompleteDialog(exportPath, exportedFiles, zipPath)
                 dialog.ShowDialog()
             Else
                 AppendToOutput("Failed to export binaries.")
             End If
         Catch ex As Exception
             AppendToOutput($"Error exporting binaries: {ex.Message}")
-            LogMessage($"[2025-08-11 20:51:42] Error exporting binaries: {ex.Message}")
+            LogMessage($"[2025-08-23 00:15:10] Error exporting binaries: {ex.Message}")
         End Try
     End Sub
 
@@ -1824,7 +1648,7 @@ Public Class MainForm
                 hardwareStats.UpdateSketchSize(sketchSize, sketchPercentage)
 
                 ' Log
-                LogMessage($"[2025-08-11 20:51:42] Compiled sketch size: {sketchSize} bytes ({sketchPercentage}%)")
+                LogMessage($"[2025-08-23 00:15:10] Compiled sketch size: {sketchSize} bytes ({sketchPercentage}%)")
             End If
 
             ' Extract RAM usage if available
@@ -1837,10 +1661,10 @@ Public Class MainForm
                 hardwareStats.UpdateRAMUsage(ramSize, ramPercentage)
 
                 ' Log
-                LogMessage($"[2025-08-11 20:51:42] RAM usage: {ramSize} bytes ({ramPercentage}%)")
+                LogMessage($"[2025-08-23 00:15:10] RAM usage: {ramSize} bytes ({ramPercentage}%)")
             End If
         Catch ex As Exception
-            LogMessage($"[2025-08-11 20:51:42] Error parsing compilation statistics: {ex.Message}")
+            LogMessage($"[2025-08-23 00:15:10] Error parsing compilation statistics: {ex.Message}")
         End Try
     End Sub
 
@@ -1896,7 +1720,7 @@ Public Class MainForm
             ramUsageBar.Value = ramPercentage
         End If
 
-        LogMessage($"[2025-08-11 20:51:42] Statistics updated by Chamil1983")
+        LogMessage($"[2025-08-23 00:15:10] Statistics updated by Chamil1983")
     End Sub
 
     ' Method to flash progress bars on successful completion
@@ -1918,7 +1742,7 @@ Public Class MainForm
 
         progressFlashTimer.Start()
 
-        LogMessage($"[2025-08-11 20:51:42] Success animation started by Chamil1983")
+        LogMessage($"[2025-08-23 00:15:10] Success animation started by Chamil1983")
     End Sub
 
     Private Sub StopProgressBarFlashing()
@@ -1934,7 +1758,7 @@ Public Class MainForm
             ramUsageBar.BarColor = DirectCast(originalColors(1), Color)
         End If
 
-        LogMessage($"[2025-08-11 20:51:42] Animation stopped by Chamil1983")
+        LogMessage($"[2025-08-23 00:15:10] Animation stopped by Chamil1983")
     End Sub
 
     Private Sub ProgressFlashTimer_Tick(sender As Object, e As EventArgs)
@@ -2023,9 +1847,8 @@ Public Class MainForm
             ' Reload settings
             LoadSettings()
 
-            ' Refresh board list and partition schemes
+            ' Refresh board list
             RefreshBoardList()
-            RefreshPartitionSchemes()
         End If
     End Sub
 
@@ -2045,13 +1868,13 @@ Public Class MainForm
 
     Private Sub LoadSettings()
         ' Load user settings
-        LogMessage($"[2025-08-16 19:46:30] Loading settings by Chamil1983")
+        LogMessage($"[2025-08-23 00:15:10] Loading settings by Chamil1983")
 
         ' Load Arduino CLI path
         If File.Exists(My.Settings.ArduinoCliPath) Then
-            LogMessage($"[2025-08-16 19:46:30] Using Arduino CLI from: {My.Settings.ArduinoCliPath}")
+            LogMessage($"[2025-08-23 00:15:10] Using Arduino CLI from: {My.Settings.ArduinoCliPath}")
         Else
-            LogMessage($"[2025-08-16 19:46:30] Arduino CLI not found at configured path: {My.Settings.ArduinoCliPath}")
+            LogMessage($"[2025-08-23 00:15:10] Arduino CLI not found at configured path: {My.Settings.ArduinoCliPath}")
             ' Try to find arduino-cli in common locations
             Dim possiblePaths As String() = {
             Path.Combine(Application.StartupPath, "arduino-cli", "arduino-cli.exe"),
@@ -2063,7 +1886,7 @@ Public Class MainForm
                 If File.Exists(path) Then
                     My.Settings.ArduinoCliPath = path
                     My.Settings.Save()
-                    LogMessage($"[2025-08-16 19:46:30] Found Arduino CLI at: {path}")
+                    LogMessage($"[2025-08-23 00:15:10] Found Arduino CLI at: {path}")
                     Exit For
                 End If
             Next
@@ -2072,7 +1895,7 @@ Public Class MainForm
         ' Load boards.txt path
         If Not String.IsNullOrEmpty(My.Settings.BoardsFilePath) AndAlso File.Exists(My.Settings.BoardsFilePath) Then
             boardConfigManager.BoardsFilePath = My.Settings.BoardsFilePath
-            LogMessage($"[2025-08-16 19:46:30] Using boards.txt from: {My.Settings.BoardsFilePath}")
+            LogMessage($"[2025-08-23 00:15:10] Using boards.txt from: {My.Settings.BoardsFilePath}")
         End If
 
         ' Set last used board if available, default to ESP32 Dev Module for compatibility
@@ -2080,13 +1903,6 @@ Public Class MainForm
             Dim boardIndex = cmbBoardType.Items.IndexOf(My.Settings.LastUsedBoard)
             If boardIndex >= 0 Then
                 cmbBoardType.SelectedIndex = boardIndex
-                ' After setting the board, we need to update the partition scheme
-                If Not String.IsNullOrEmpty(My.Settings.LastUsedPartition) Then
-                    Dim partitionIndex = cmbPartitionOption.Items.IndexOf(My.Settings.LastUsedPartition)
-                    If partitionIndex >= 0 Then
-                        cmbPartitionOption.SelectedIndex = partitionIndex
-                    End If
-                End If
             Else
                 ' If saved board not found, default to ESP32 Dev Module
                 Dim esp32Index = cmbBoardType.Items.IndexOf("ESP32 Dev Module")
@@ -2106,20 +1922,6 @@ Public Class MainForm
             ElseIf cmbBoardType.Items.Count > 0 Then
                 cmbBoardType.SelectedIndex = 0
             End If
-
-            ' Get default partition for the selected board
-            If cmbBoardType.SelectedItem IsNot Nothing Then
-                Dim selectedBoard = cmbBoardType.SelectedItem.ToString()
-                Dim defaultPartition = boardConfigManager.GetDefaultPartitionForBoard(selectedBoard)
-                If Not String.IsNullOrEmpty(defaultPartition) Then
-                    Dim partitionIndex = cmbPartitionOption.Items.IndexOf(defaultPartition)
-                    If partitionIndex >= 0 Then
-                        cmbPartitionOption.SelectedIndex = partitionIndex
-                        My.Settings.LastUsedPartition = defaultPartition
-                        My.Settings.Save()
-                    End If
-                End If
-            End If
         End If
 
         ' Load last used project if available
@@ -2136,7 +1938,6 @@ Public Class MainForm
         UpdateRecentProjectsMenu()
     End Sub
 
-
     Private Sub LogMessage(message As String)
         ' Log messages to file if enabled
         If My.Settings.EnableLogging Then
@@ -2146,7 +1947,7 @@ Public Class MainForm
                     writer.WriteLine(message)
                 End Using
             Catch ex As Exception
-                Debug.WriteLine($"[2025-08-11 20:51:42] Logging error: {ex.Message}")
+                Debug.WriteLine($"[2025-08-23 00:15:10] Logging error: {ex.Message}")
             End Try
         End If
 
@@ -2164,7 +1965,7 @@ Public Class MainForm
         SaveBoardSettings()
 
         ' Log application exit
-        LogMessage($"[2025-08-11 20:51:42] Application exited by Chamil1983")
+        LogMessage($"[2025-08-23 00:15:10] Application exited by Chamil1983")
     End Sub
 
     ' Menu event handlers
@@ -2190,7 +1991,7 @@ Public Class MainForm
                 boardConfigManager.BoardsFilePath = openFileDialog.FileName
 
                 ' Log the change
-                LogMessage($"[2025-08-11 20:51:42] boards.txt path updated to {openFileDialog.FileName} by Chamil1983")
+                LogMessage($"[2025-08-23 00:15:10] boards.txt path updated to {openFileDialog.FileName} by Chamil1983")
 
                 ' Ask if user wants to reload configurations
                 If MessageBox.Show("Would you like to reload board configurations from the selected file?",
@@ -2199,9 +2000,6 @@ Public Class MainForm
 
                     ' Refresh board list
                     RefreshBoardList()
-
-                    ' Refresh partition schemes
-                    RefreshPartitionSchemes()
 
                     ' Save the setting
                     My.Settings.BoardsFilePath = openFileDialog.FileName
@@ -2222,7 +2020,7 @@ Public Class MainForm
         Dim aboutMessage As String = "KC-Link Loader v1.1" + Environment.NewLine + Environment.NewLine +
                                  "A utility for compiling and uploading code to ESP32 boards." + Environment.NewLine + Environment.NewLine +
                                  "Copyright © 2025 Chamil1983" + Environment.NewLine +
-                                 "Last updated: 2025-08-11"
+                                 "Last updated: 2025-08-23"
 
         MessageBox.Show(aboutMessage, "About KC-Link Loader", MessageBoxButtons.OK, MessageBoxIcon.Information)
     End Sub
@@ -2267,7 +2065,7 @@ Public Class MainForm
             projectPath = path
             txtProjectPath.Text = projectPath
             UpdateProjectInfo()
-            LogMessage($"[2025-08-11 20:51:42] Opened recent project: {path}")
+            LogMessage($"[2025-08-23 00:15:10] Opened recent project: {path}")
         Else
             MessageBox.Show("Project directory no longer exists.", "Project Not Found", MessageBoxButtons.OK, MessageBoxIcon.Warning)
 
@@ -2285,7 +2083,7 @@ Public Class MainForm
             My.Settings.RecentProjects.Clear()
             My.Settings.Save()
             UpdateRecentProjectsMenu()
-            LogMessage($"[2025-08-11 20:51:42] Recent projects list cleared by Chamil1983")
+            LogMessage($"[2025-08-23 00:15:10] Recent projects list cleared by Chamil1983")
         End If
     End Sub
 
