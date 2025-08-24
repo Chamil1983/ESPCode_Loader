@@ -1,4 +1,4 @@
-﻿Imports System
+Imports System
 Imports System.IO
 Imports System.Collections.Generic
 Imports System.Diagnostics
@@ -188,10 +188,7 @@ Public Class BoardManager
         End If
 
         ' Handle ESP32-S2/S3/C3 specific incompatibilities
-        If boardId.Contains("esp32s2") OrElse boardId.Contains("esp32s3") OrElse
-           boardId.Contains("esp32c3") OrElse boardId.Contains("esp32c2") OrElse
-           boardId.Contains("esp32c6") OrElse boardId.Contains("esp32h2") OrElse
-           boardId.Contains("esp32c5") OrElse boardId.Contains("esp32p4") Then
+        If boardId.Contains("esp32s3") OrElse boardId.Contains("esp32c5") Then
 
             ' These boards don't support the FlashFreq parameter
             If Not boardUnsupportedMenus.ContainsKey(boardName) Then
@@ -409,15 +406,15 @@ Public Class BoardManager
         ' Only add defaults for menus that this board actually supports
         If supportedMenus.Contains("CPUFreq") AndAlso (menuOptions.ContainsKey("CPUFreq") AndAlso menuOptions("CPUFreq").Count = 0) Then
             ' CPU Frequency options
-            If boardId.Contains("esp32c2") Then
+            If boardId.Contains("esp32c6") Then
+                menuOptions("CPUFreq").Add("160", "160MHz")
                 menuOptions("CPUFreq").Add("120", "120MHz")
                 menuOptions("CPUFreq").Add("80", "80MHz")
             ElseIf boardId.Contains("esp32c3") OrElse boardId.Contains("esp32c6") Then
                 menuOptions("CPUFreq").Add("160", "160MHz")
                 menuOptions("CPUFreq").Add("80", "80MHz")
             ElseIf boardId.Contains("esp32h2") Then
-                menuOptions("CPUFreq").Add("96", "96MHz")
-                menuOptions("CPUFreq").Add("48", "48MHz")
+                menuOptions.Remove("CPUFreq")
             Else
                 menuOptions("CPUFreq").Add("240", "240MHz")
                 menuOptions("CPUFreq").Add("160", "160MHz")
@@ -433,8 +430,18 @@ Public Class BoardManager
 
         If supportedMenus.Contains("FlashFreq") AndAlso (menuOptions.ContainsKey("FlashFreq") AndAlso menuOptions("FlashFreq").Count = 0) Then
             ' Flash Frequency options
+            'If boardId.Contains("esp32h2") Then
+            '    menuOptions("FlashFreq").Add("64", "64MHz")
+            '    menuOptions("FlashFreq").Add("32", "32MHz")
+            '    menuOptions("FlashFreq").Add("16", "16MHz")
+
+
+            'Else
             menuOptions("FlashFreq").Add("80", "80MHz")
             menuOptions("FlashFreq").Add("40", "40MHz")
+            'End If
+
+
         End If
 
         If supportedMenus.Contains("PartitionScheme") AndAlso (menuOptions.ContainsKey("PartitionScheme") AndAlso menuOptions("PartitionScheme").Count = 0) Then
@@ -514,7 +521,6 @@ Public Class BoardManager
             "ESP32 PICO-D4",
             "ESP32-S2 Dev Module",
             "ESP32-S3 Dev Module",
-            "ESP32-C2 Dev Module",
             "ESP32-C3 Dev Module",
             "ESP32-C6 Dev Module",
             "ESP32-H2 Dev Module",
@@ -608,10 +614,8 @@ Public Class BoardManager
 
                     Case "FlashFreq"
                         ' Check for default flash frequency - only add for ESP32 but not S2/S3/C3 variants
-                        If Not boardId.Contains("esp32s2") AndAlso Not boardId.Contains("esp32s3") AndAlso
-                           Not boardId.Contains("esp32c3") AndAlso Not boardId.Contains("esp32c2") AndAlso
-                           Not boardId.Contains("esp32c6") AndAlso Not boardId.Contains("esp32h2") AndAlso
-                           Not boardId.Contains("esp32c5") AndAlso Not boardId.Contains("esp32p4") Then
+                        If Not boardId.Contains("esp32s3") AndAlso Not boardId.Contains("esp32c3") AndAlso Not boardId.Contains("esp32c5") Then
+                            'Not boardId.Contains("esp32c6") AndAlso Not boardId.Contains("esp32h2") AndAlso 
 
                             If parameters.ContainsKey("build.flash_freq") Then
                                 Dim flashFreq = parameters("build.flash_freq")
@@ -620,9 +624,12 @@ Public Class BoardManager
                                 ' Special handling for esp32wroverkit - use 40MHz default
                                 If boardId = "esp32wroverkit" Then
                                     paramList("FlashFreq") = "40" ' Default for Wrover Kit per Main.txt
+                                ElseIf boardId = "esp32h2" Then
+                                    paramList("FlashFreq") = "64"
                                 Else
                                     paramList("FlashFreq") = "80" ' Default
                                 End If
+
                             End If
                         End If
 
@@ -688,9 +695,8 @@ Public Class BoardManager
             ' Only add CPUFreq for boards that support it
             If boardId = "esp32" OrElse
                boardId.Contains("esp32s") OrElse
-               boardId.Contains("esp32c") OrElse
-               boardId.Contains("esp32h") OrElse
-               boardId.Contains("esp32p") Then
+               boardId.Contains("esp32c") OrElse                'boardId.Contains("esp32h") OrElse
+                boardId.Contains("esp32p") Then
                 paramList("CPUFreq") = "240"
             End If
         End If
@@ -701,14 +707,15 @@ Public Class BoardManager
 
         ' Add FlashFreq only for original ESP32 not for S2/S3/C3 variants
         If supportedMenus.Contains("FlashFreq") AndAlso Not paramList.ContainsKey("FlashFreq") Then
-            If Not boardId.Contains("esp32s2") AndAlso Not boardId.Contains("esp32s3") AndAlso
-               Not boardId.Contains("esp32c3") AndAlso Not boardId.Contains("esp32c2") AndAlso
-               Not boardId.Contains("esp32c6") AndAlso Not boardId.Contains("esp32h2") AndAlso
-               Not boardId.Contains("esp32c5") AndAlso Not boardId.Contains("esp32p4") Then
+            If Not boardId.Contains("esp32s3") AndAlso Not boardId.Contains("esp32c3") AndAlso Not boardId.Contains("esp32c5") Then
+                'Not boardId.Contains("esp32c6") AndAlso Not boardId.Contains("esp32h2") AndAlso
+
 
                 ' Special handling for esp32wroverkit - use 40MHz default
                 If boardId = "esp32wroverkit" Then
                     paramList("FlashFreq") = "40" ' Default for Wrover Kit per Main.txt
+                ElseIf boardId = "esp32h2" Then
+                    paramList("FlashFreq") = "64"
                 Else
                     paramList("FlashFreq") = "80"
                 End If
@@ -763,7 +770,7 @@ Public Class BoardManager
 
         ElseIf boardId.Contains("esp32s2") Then
             ' ESP32-S2 specific parameters
-            If supportedMenus.Contains("USBMode") Then paramList("USBMode") = "hwcdc"
+            'If supportedMenus.Contains("USBMode") Then paramList("USBMode") = "hwcdc"
             If supportedMenus.Contains("CDCOnBoot") Then paramList("CDCOnBoot") = "default"
             If supportedMenus.Contains("MSCOnBoot") Then paramList("MSCOnBoot") = "default"
             If supportedMenus.Contains("DFUOnBoot") Then paramList("DFUOnBoot") = "default"
@@ -839,7 +846,6 @@ Public Class BoardManager
         boardIdMap("ESP32 PICO-D4") = "pico32"
         boardIdMap("ESP32-S2 Dev Module") = "esp32s2"
         boardIdMap("ESP32-S3 Dev Module") = "esp32s3"
-        boardIdMap("ESP32-C2 Dev Module") = "esp32c2"
         boardIdMap("ESP32-C3 Dev Module") = "esp32c3"
         boardIdMap("ESP32-C6 Dev Module") = "esp32c6"
         boardIdMap("ESP32-H2 Dev Module") = "esp32h2"
@@ -857,21 +863,19 @@ Public Class BoardManager
         ' ESP32-S2/S3 and newer boards - no FlashFreq parameter
         boardConfigurations("ESP32-S2 Dev Module") = "esp32:esp32:esp32s2:PartitionScheme=default,CPUFreq=240,FlashMode=dio"
         boardConfigurations("ESP32-S3 Dev Module") = "esp32:esp32:esp32s3:PartitionScheme=default,CPUFreq=240,FlashMode=dio,USBMode=hwcdc"
-        boardConfigurations("ESP32-C2 Dev Module") = "esp32:esp32:esp32c2:PartitionScheme=default,CPUFreq=120,FlashMode=dio"
-        boardConfigurations("ESP32-C3 Dev Module") = "esp32:esp32:esp32c3:PartitionScheme=default,CPUFreq=160,FlashMode=dio"
-        boardConfigurations("ESP32-C6 Dev Module") = "esp32:esp32:esp32c6:PartitionScheme=default,CPUFreq=160,FlashMode=dio"
-        boardConfigurations("ESP32-H2 Dev Module") = "esp32:esp32:esp32h2:PartitionScheme=default,CPUFreq=96,FlashMode=dio"
+        boardConfigurations("ESP32-C3 Dev Module") = "esp32:esp32:esp32c3:PartitionScheme=default,CPUFreq=160,FlashMode=qio"
+        boardConfigurations("ESP32-C6 Dev Module") = "esp32:esp32:esp32c6:PartitionScheme=default,CPUFreq=160,FlashMode=qio"
+        boardConfigurations("ESP32-H2 Dev Module") = "esp32:esp32:esp32h2:PartitionScheme=default,FlashMode=qio,FlashFreq=64"
         boardConfigurations("ESP32-C5 Dev Module") = "esp32:esp32:esp32c5:PartitionScheme=default,CPUFreq=240,FlashMode=dio"
-        boardConfigurations("ESP32-P4 Dev Module") = "esp32:esp32:esp32p4:PartitionScheme=default,CPUFreq=240,FlashMode=dio"
+        boardConfigurations("ESP32-P4 Dev Module") = "esp32:esp32:esp32p4:PartitionScheme=default,CPUFreq=360,FlashMode=qio,,FlashFreq=80"
 
         ' Initialize menu options dictionaries for standard boards
         boardMenuOptions("ESP32 Dev Module") = CreateDefaultMenuOptions()
-        boardMenuOptions("ESP32 PICO-D4") = CreateDefaultMenuOptions()
+        boardMenuOptions("ESP32 PICO-D4") = CreatePICOMenuOptions()
         boardMenuOptions("ESP32 Wrover Module") = CreateWroverMenuOptions()
         boardMenuOptions("ESP32 Wrover Kit") = CreateWroverKitMenuOptions()  ' MODIFIED: Use separate function
         boardMenuOptions("ESP32-S2 Dev Module") = CreateS2MenuOptions()
         boardMenuOptions("ESP32-S3 Dev Module") = CreateS3MenuOptions()
-        boardMenuOptions("ESP32-C2 Dev Module") = CreateC2MenuOptions()
         boardMenuOptions("ESP32-C3 Dev Module") = CreateC3MenuOptions()
         boardMenuOptions("ESP32-C6 Dev Module") = CreateC6MenuOptions()
         boardMenuOptions("ESP32-H2 Dev Module") = CreateH2MenuOptions()
@@ -880,12 +884,11 @@ Public Class BoardManager
 
         ' Initialize parameter dictionaries for standard boards
         boardParameters("ESP32 Dev Module") = CreateDefaultBoardParameters()
-        boardParameters("ESP32 PICO-D4") = CreateDefaultBoardParameters()
+        boardParameters("ESP32 PICO-D4") = CreatePICOBoardParameters()
         boardParameters("ESP32 Wrover Module") = CreateWroverBoardParameters()
         boardParameters("ESP32 Wrover Kit") = CreateWroverKitBoardParameters()  ' MODIFIED: Use separate function
         boardParameters("ESP32-S2 Dev Module") = CreateS2BoardParameters()
         boardParameters("ESP32-S3 Dev Module") = CreateS3BoardParameters()
-        boardParameters("ESP32-C2 Dev Module") = CreateC2BoardParameters()
         boardParameters("ESP32-C3 Dev Module") = CreateC3BoardParameters()
         boardParameters("ESP32-C6 Dev Module") = CreateC6BoardParameters()
         boardParameters("ESP32-H2 Dev Module") = CreateH2BoardParameters()
@@ -894,17 +897,16 @@ Public Class BoardManager
 
         ' Initialize supported menus for standard boards
         boardSupportedMenus("ESP32 Dev Module") = CreateDefaultSupportedMenus()
-        boardSupportedMenus("ESP32 PICO-D4") = CreatePICOUnsupportedMenus()
+        boardSupportedMenus("ESP32 PICO-D4") = CreatePICOSupportedMenus()
         boardSupportedMenus("ESP32 Wrover Module") = CreateWroverSupportedMenus()
         boardSupportedMenus("ESP32 Wrover Kit") = CreateWroverKitSupportedMenus()  ' MODIFIED: Use separate function
         boardSupportedMenus("ESP32-S2 Dev Module") = CreateS2SupportedMenus()
         boardSupportedMenus("ESP32-S3 Dev Module") = CreateS3SupportedMenus()
-        boardSupportedMenus("ESP32-C2 Dev Module") = CreateCSupportedMenus()
         boardSupportedMenus("ESP32-C3 Dev Module") = CreateCSupportedMenus()
         boardSupportedMenus("ESP32-C6 Dev Module") = CreateCSupportedMenus()
         boardSupportedMenus("ESP32-H2 Dev Module") = CreateCSupportedMenus()
         boardSupportedMenus("ESP32-C5 Dev Module") = CreateCSupportedMenus()
-        boardSupportedMenus("ESP32-P4 Dev Module") = CreateCSupportedMenus()
+        boardSupportedMenus("ESP32-P4 Dev Module") = CreateS3SupportedMenus()
 
         ' Initialize unsupported menus
         boardUnsupportedMenus("ESP32 Dev Module") = New HashSet(Of String)()
@@ -913,12 +915,11 @@ Public Class BoardManager
         boardUnsupportedMenus("ESP32 Wrover Kit") = CreateWroverKitUnsupportedMenus()  ' MODIFIED: Use separate function
         boardUnsupportedMenus("ESP32-S2 Dev Module") = CreateS2UnsupportedMenus()
         boardUnsupportedMenus("ESP32-S3 Dev Module") = CreateS3UnsupportedMenus()
-        boardUnsupportedMenus("ESP32-C2 Dev Module") = CreateCUnsupportedMenus()
-        boardUnsupportedMenus("ESP32-C3 Dev Module") = CreateCUnsupportedMenus()
-        boardUnsupportedMenus("ESP32-C6 Dev Module") = CreateCUnsupportedMenus()
-        boardUnsupportedMenus("ESP32-H2 Dev Module") = CreateCUnsupportedMenus()
-        boardUnsupportedMenus("ESP32-C5 Dev Module") = CreateCUnsupportedMenus()
-        boardUnsupportedMenus("ESP32-P4 Dev Module") = CreateCUnsupportedMenus()
+        boardUnsupportedMenus("ESP32-C3 Dev Module") = CreateC3UnsupportedMenus()
+        boardUnsupportedMenus("ESP32-C6 Dev Module") = CreateC3UnsupportedMenus()
+        boardUnsupportedMenus("ESP32-H2 Dev Module") = CreateH2UnsupportedMenus()
+        boardUnsupportedMenus("ESP32-C5 Dev Module") = CreateC3UnsupportedMenus()
+        boardUnsupportedMenus("ESP32-P4 Dev Module") = CreateP4UnsupportedMenus()
 
         ' Initialize fixed parameters
         boardFixedParams("ESP32 Dev Module") = New Dictionary(Of String, String)()
@@ -927,7 +928,6 @@ Public Class BoardManager
         boardFixedParams("ESP32 Wrover Kit") = CreateWroverKitFixedParams()  ' MODIFIED: Use separate function
         boardFixedParams("ESP32-S2 Dev Module") = New Dictionary(Of String, String)()
         boardFixedParams("ESP32-S3 Dev Module") = New Dictionary(Of String, String)()
-        boardFixedParams("ESP32-C2 Dev Module") = New Dictionary(Of String, String)()
         boardFixedParams("ESP32-C3 Dev Module") = New Dictionary(Of String, String)()
         boardFixedParams("ESP32-C6 Dev Module") = New Dictionary(Of String, String)()
         boardFixedParams("ESP32-H2 Dev Module") = New Dictionary(Of String, String)()
@@ -941,7 +941,10 @@ Public Class BoardManager
         Dim wroverKitOrder As New List(Of String) From {"PartitionScheme", "CPUFreq", "FlashMode", "FlashFreq", "UploadSpeed", "DebugLevel", "EraseFlash"}  ' MODIFIED: Separate order for Wrover Kit
         Dim s2Order As New List(Of String) From {"PartitionScheme", "CPUFreq", "FlashMode", "FlashFreq", "UploadSpeed", "DebugLevel", "PSRAM", "CDCOnBoot", "MSCOnBoot", "DFUOnBoot", "UploadMode", "EraseFlash", "JTAGAdapter", "LoopCore", "EventsCore", "ZigbeeMode"}
         Dim s3Order As New List(Of String) From {"PartitionScheme", "CPUFreq", "FlashMode", "UploadSpeed", "DebugLevel", "PSRAM", "USBMode", "CDCOnBoot", "MSCOnBoot", "DFUOnBoot", "UploadMode", "FlashSize", "LoopCore", "EventsCore", "EraseFlash", "JTAGAdapter", "ZigbeeMode"}
-        Dim cOrder As New List(Of String) From {"PartitionScheme", "CPUFreq", "FlashMode", "UploadSpeed", "DebugLevel", "PSRAM", "EraseFlash", "JTAGAdapter", "LoopCore", "EventsCore", "ZigbeeMode"}
+        Dim c3Order As New List(Of String) From {"PartitionScheme", "CPUFreq", "FlashMode", "FlashFreq", "UploadSpeed", "DebugLevel", "CDCOnBoot", "FlashSize", "EraseFlash", "JTAGAdapter", "ZigbeeMode"}
+        Dim h2Order As New List(Of String) From {"PartitionScheme", "FlashMode", "FlashFreq", "UploadSpeed", "DebugLevel", "CDCOnBoot", "FlashSize", "EraseFlash", "JTAGAdapter", "ZigbeeMode"}
+        Dim cOrder As New List(Of String) From {"PartitionScheme", "CPUFreq", "FlashMode", "UploadSpeed", "DebugLevel", "EraseFlash", "JTAGAdapter", "LoopCore", "EventsCore", "ZigbeeMode"}
+        Dim p4Order As New List(Of String) From {"PartitionScheme", "CPUFreq", "FlashMode", "FlashFreq", "UploadSpeed", "DebugLevel", "PSRAM", "USBMode", "CDCOnBoot", "MSCOnBoot", "DFUOnBoot", "UploadMode", "FlashSize", "EraseFlash", "JTAGAdapter"}
 
         boardConfigOrder("ESP32 Dev Module") = defaultOrder
         boardConfigOrder("ESP32 PICO-D4") = picoOrder
@@ -949,10 +952,9 @@ Public Class BoardManager
         boardConfigOrder("ESP32 Wrover Kit") = wroverKitOrder  ' MODIFIED: Use separate order
         boardConfigOrder("ESP32-S2 Dev Module") = s2Order
         boardConfigOrder("ESP32-S3 Dev Module") = s3Order
-        boardConfigOrder("ESP32-C2 Dev Module") = cOrder
-        boardConfigOrder("ESP32-C3 Dev Module") = cOrder
-        boardConfigOrder("ESP32-C6 Dev Module") = cOrder
-        boardConfigOrder("ESP32-H2 Dev Module") = cOrder
+        boardConfigOrder("ESP32-C3 Dev Module") = c3Order
+        boardConfigOrder("ESP32-C6 Dev Module") = c3Order
+        boardConfigOrder("ESP32-H2 Dev Module") = h2Order
         boardConfigOrder("ESP32-C5 Dev Module") = cOrder
         boardConfigOrder("ESP32-P4 Dev Module") = cOrder
     End Sub
@@ -1014,6 +1016,7 @@ Public Class BoardManager
         unsupportedMenus.Add("ZigbeeMode")
         Return unsupportedMenus
     End Function
+
 
     ' Create fixed parameters for ESP32 Wrover boards
     Private Function CreateWroverFixedParams() As Dictionary(Of String, String)
@@ -1084,7 +1087,7 @@ Public Class BoardManager
     ' Create unsupported menus for ESP32-S2 boards
     Private Function CreateS2UnsupportedMenus() As HashSet(Of String)
         Dim unsupportedMenus As New HashSet(Of String)
-        ' S2 doesn't support FlashFreq
+        ' S2 doesn't support USBMode
         unsupportedMenus.Add("USBMode")
         Return unsupportedMenus
     End Function
@@ -1117,9 +1120,37 @@ Public Class BoardManager
         Return unsupportedMenus
     End Function
 
+    ' Create unsupported menus for ESP32-C3 boards
+    Private Function CreateC3UnsupportedMenus() As HashSet(Of String)
+        Dim unsupportedMenus As New HashSet(Of String)
+        ' S3 doesn't support FlashFreq
+        unsupportedMenus.Add("LoopCore")
+        unsupportedMenus.Add("EventsCore")
+        Return unsupportedMenus
+    End Function
+
+    ' Create unsupported menus for ESP32-H2 boards
+    Private Function CreateH2UnsupportedMenus() As HashSet(Of String)
+        Dim unsupportedMenus As New HashSet(Of String)
+        unsupportedMenus.Add("CPUFreq")
+        unsupportedMenus.Add("LoopCore")
+        unsupportedMenus.Add("EventsCore")
+        Return unsupportedMenus
+    End Function
+
+    ' Create unsupported menus for ESP32-P4 boards
+    Private Function CreateP4UnsupportedMenus() As HashSet(Of String)
+        Dim unsupportedMenus As New HashSet(Of String)
+        unsupportedMenus.Add("ZigbeeMode")
+        unsupportedMenus.Add("LoopCore")
+        unsupportedMenus.Add("EventsCore")
+        Return unsupportedMenus
+    End Function
+
     ' Create supported menus for ESP32-S3 boards
     Private Function CreateS3SupportedMenus() As HashSet(Of String)
-        Dim supportedMenus = CreateS2SupportedMenus() ' S3 has all the S2 options
+        'Dim supportedMenus = CreateS2SupportedMenus() ' S3 has all the S2 options
+        Dim supportedMenus As New HashSet(Of String)
         ' Add S3-specific options
         supportedMenus.Add("CPUFreq")
         supportedMenus.Add("FlashMode")
@@ -1142,27 +1173,21 @@ Public Class BoardManager
         Return supportedMenus
     End Function
 
-    ' Create unsupported menus for ESP32-C series boards
-    Private Function CreateCUnsupportedMenus() As HashSet(Of String)
-        Dim unsupportedMenus As New HashSet(Of String)
-        ' C series doesn't support FlashFreq
-        unsupportedMenus.Add("FlashFreq")
-        Return unsupportedMenus
-    End Function
 
-    ' Create supported menus for ESP32-C series boards
     Private Function CreateCSupportedMenus() As HashSet(Of String)
         Dim supportedMenus As New HashSet(Of String)
         supportedMenus.Add("CPUFreq")
         supportedMenus.Add("FlashMode")
+        supportedMenus.Add("FlashFreq")
+        supportedMenus.Add("FlashSize")
         supportedMenus.Add("PartitionScheme")
         supportedMenus.Add("UploadSpeed")
         supportedMenus.Add("DebugLevel")
-        supportedMenus.Add("PSRAM")
         supportedMenus.Add("EraseFlash")
         supportedMenus.Add("JTAGAdapter")
         supportedMenus.Add("LoopCore")
         supportedMenus.Add("EventsCore")
+        supportedMenus.Add("CDCOnBoot")
         supportedMenus.Add("ZigbeeMode")
         Return supportedMenus
     End Function
@@ -1466,8 +1491,6 @@ Public Class BoardManager
     Private Function CreateS2MenuOptions() As Dictionary(Of String, Dictionary(Of String, String))
         Dim menuOptions = CreateDefaultMenuOptions()
 
-
-
         ' Add S2-specific options
 
         Dim cdcOnBootOptions As New Dictionary(Of String, String)
@@ -1555,8 +1578,6 @@ Public Class BoardManager
         debugOptions.Add("verbose", "Verbose")
         menuOptions.Add("DebugLevel", debugOptions)
 
-
-
         ' EraseFlash options
         Dim eraseFlashOptions As New Dictionary(Of String, String)
         eraseFlashOptions.Add("none", "None")
@@ -1633,44 +1654,107 @@ Public Class BoardManager
         Return menuOptions
     End Function
 
-    ' Create menu options for ESP32-C2 boards
-    Private Function CreateC2MenuOptions() As Dictionary(Of String, Dictionary(Of String, String))
-        Dim menuOptions = CreateDefaultMenuOptions()
 
-        ' Remove FlashFreq as it's not compatible with C2
-        menuOptions.Remove("FlashFreq")
-
-        ' Modify CPU frequencies for C2
-        Dim cpuFreqOptions As New Dictionary(Of String, String)
-        cpuFreqOptions.Add("120", "120MHz")
-        cpuFreqOptions.Add("96", "96MHz")
-        cpuFreqOptions.Add("80", "80MHz")
-        cpuFreqOptions.Add("60", "60MHz")
-        cpuFreqOptions.Add("48", "48MHz")
-        cpuFreqOptions.Add("40", "40MHz")
-        cpuFreqOptions.Add("26", "26MHz")
-        cpuFreqOptions.Add("20", "20MHz")
-        cpuFreqOptions.Add("10", "10MHz")
-        menuOptions("CPUFreq") = cpuFreqOptions
-
-        Return menuOptions
-    End Function
 
     ' Create menu options for ESP32-C3 boards
     Private Function CreateC3MenuOptions() As Dictionary(Of String, Dictionary(Of String, String))
-        Dim menuOptions = CreateDefaultMenuOptions()
+        Dim menuOptions As New Dictionary(Of String, Dictionary(Of String, String))
 
-        ' Remove FlashFreq as it's not compatible with C3
-        menuOptions.Remove("FlashFreq")
-
-        ' Modify CPU frequencies for C3
+        ' CPU Frequency options
         Dim cpuFreqOptions As New Dictionary(Of String, String)
-        cpuFreqOptions.Add("160", "160MHz")
-        cpuFreqOptions.Add("80", "80MHz")
+        cpuFreqOptions.Add("160", "160MHz (WiFi)")
+        cpuFreqOptions.Add("80", "80MHz (WiFi)")
         cpuFreqOptions.Add("40", "40MHz")
         cpuFreqOptions.Add("20", "20MHz")
         cpuFreqOptions.Add("10", "10MHz")
-        menuOptions("CPUFreq") = cpuFreqOptions
+        menuOptions.Add("CPUFreq", cpuFreqOptions)
+
+        Dim flashSizeOptions As New Dictionary(Of String, String)
+        flashSizeOptions.Add("4M", "4MB (32Mb)")
+        flashSizeOptions.Add("8M", "8MB (64Mb)")
+        flashSizeOptions.Add("2M", "2MB (16Mb)")
+        flashSizeOptions.Add("16M", "16MB (128Mb")
+        menuOptions.Add("FlashSize", flashSizeOptions)
+
+        ' Flash Mode options - includes QIO and DIO per Main.txt
+        Dim flashModeOptions As New Dictionary(Of String, String)
+        flashModeOptions.Add("qio", "QIO")
+        flashModeOptions.Add("dio", "DIO")
+        menuOptions.Add("FlashMode", flashModeOptions)
+
+        ' Flash Frequency options - 80MHz and 40MHz per Main.txt, default 40MHz for Wrover Kit
+        Dim flashFreqOptions As New Dictionary(Of String, String)
+        flashFreqOptions.Add("80", "80MHz")
+        flashFreqOptions.Add("40", "40MHz") ' Default for Wrover Kit per Main.txt
+        menuOptions.Add("FlashFreq", flashFreqOptions)
+
+        ' Partition Scheme options - extensive list per Main.txt
+        Dim partitionOptions As New Dictionary(Of String, String)
+        partitionOptions.Add("default", "Default 4MB with spiffs (1.2MB APP/1.5MB SPIFFS)")
+        partitionOptions.Add("defaultffat", "Default 4MB with ffat (1.2MB APP/1.5MB FATFS)")
+        partitionOptions.Add("default_8MB", "8M with spiffs (3MB APP/1.5MB SPIFFS)")
+        partitionOptions.Add("minimal", "Minimal (1.3MB APP/700KB SPIFFS)")
+        partitionOptions.Add("no_ota", "No OTA (2MB APP/2MB SPIFFS)")
+        partitionOptions.Add("noota_3g", "No OTA (1MB APP/3MB SPIFFS)")
+        partitionOptions.Add("noota_ffat", "No OTA (2MB APP/2MB FATFS)")
+        partitionOptions.Add("noota_3gffat", "No OTA (1MB APP/3MB FATFS)")
+        partitionOptions.Add("huge_app", "Huge APP (3MB No OTA/1MB SPIFFS)")
+        partitionOptions.Add("min_spiffs", "Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)")
+        partitionOptions.Add("fatflash", "16M Flash (2MB APP/12.5MB FATFS)")
+        partitionOptions.Add("rainmaker", "RainMaker 4MB")
+        partitionOptions.Add("rainmaker_4MB", "RainMaker 4MB No OTA")
+        partitionOptions.Add("rainmaker_8MB", "RainMaker 8MB")
+        partitionOptions.Add("zigbee_zczr", "Zigbee ZCZR 4MB with spiffs")
+        partitionOptions.Add("zigbee_zczr_8MB", "Zigbee ZCZR 8MB with spiffs")
+        partitionOptions.Add("custom", "Custom")
+        menuOptions.Add("PartitionScheme", partitionOptions)
+
+        ' Upload Speed options per Main.txt
+        Dim uploadSpeedOptions As New Dictionary(Of String, String)
+        uploadSpeedOptions.Add("921600", "921600")
+        uploadSpeedOptions.Add("512000", "512000")
+        uploadSpeedOptions.Add("460800", "460800")
+        uploadSpeedOptions.Add("256000", "256000")
+        uploadSpeedOptions.Add("230400", "230400")
+        uploadSpeedOptions.Add("115200", "115200")
+        menuOptions.Add("UploadSpeed", uploadSpeedOptions)
+
+        ' Debug Level options
+        Dim debugOptions As New Dictionary(Of String, String)
+        debugOptions.Add("none", "None")
+        debugOptions.Add("error", "Error")
+        debugOptions.Add("warn", "Warning")
+        debugOptions.Add("info", "Info")
+        debugOptions.Add("debug", "Debug")
+        debugOptions.Add("verbose", "Verbose")
+        menuOptions.Add("DebugLevel", debugOptions)
+
+        ' CDC options
+        Dim cdcOnBootOptions As New Dictionary(Of String, String)
+        cdcOnBootOptions.Add("default", "Disabled")
+        cdcOnBootOptions.Add("cdc", "Enabled")
+        menuOptions.Add("CDCOnBoot", cdcOnBootOptions)
+
+        ' Erase Flash options per Main.txt
+        Dim eraseFlashOptions As New Dictionary(Of String, String)
+        eraseFlashOptions.Add("none", "Disabled")
+        eraseFlashOptions.Add("all", "Enabled")
+        menuOptions.Add("EraseFlash", eraseFlashOptions)
+
+        ' JTAG options
+        Dim jtagAdapterOptions As New Dictionary(Of String, String)
+        jtagAdapterOptions.Add("default", "Disabled")
+        jtagAdapterOptions.Add("builtin", "Integrated USB JTAG")
+        jtagAdapterOptions.Add("external", "FTDI Adapter")
+        jtagAdapterOptions.Add("bridge", "ESP USB Bridge")
+        menuOptions.Add("JTAGAdapter", jtagAdapterOptions)
+
+
+        'Zigbee optionns
+        Dim zigbeeModeOptions As New Dictionary(Of String, String)
+        zigbeeModeOptions.Add("default", "Disabled")
+        zigbeeModeOptions.Add("zczr", "Zigbee ZCZR (coordinator/router)")
+        menuOptions.Add("ZigbeeMode", zigbeeModeOptions)
 
         Return menuOptions
     End Function
@@ -1682,21 +1766,101 @@ Public Class BoardManager
 
     ' Create menu options for ESP32-H2 boards
     Private Function CreateH2MenuOptions() As Dictionary(Of String, Dictionary(Of String, String))
-        Dim menuOptions = CreateDefaultMenuOptions()
+        Dim menuOptions As New Dictionary(Of String, Dictionary(Of String, String))
 
-        ' Remove FlashFreq as it's not compatible with H2
-        menuOptions.Remove("FlashFreq")
 
-        ' Modify CPU frequencies for H2
-        Dim cpuFreqOptions As New Dictionary(Of String, String)
-        cpuFreqOptions.Add("96", "96MHz")
-        cpuFreqOptions.Add("48", "48MHz")
-        cpuFreqOptions.Add("32", "32MHz")
-        cpuFreqOptions.Add("16", "16MHz")
-        cpuFreqOptions.Add("8", "8MHz")
-        menuOptions("CPUFreq") = cpuFreqOptions
+        Dim flashSizeOptions As New Dictionary(Of String, String)
+        flashSizeOptions.Add("4M", "4MB (32Mb)")
+        flashSizeOptions.Add("8M", "8MB (64Mb)")
+        flashSizeOptions.Add("2M", "2MB (16Mb)")
+        flashSizeOptions.Add("16M", "16MB (128Mb)")
+        menuOptions.Add("FlashSize", flashSizeOptions)
+
+        ' Flash Mode options - includes QIO and DIO per Main.txt
+        Dim flashModeOptions As New Dictionary(Of String, String)
+        flashModeOptions.Add("qio", "QIO")
+        flashModeOptions.Add("dio", "DIO")
+        menuOptions.Add("FlashMode", flashModeOptions)
+
+        ' Flash Frequency options - per Main.txt, default 40MHz for Wrover Kit
+        Dim flashFreqOptions As New Dictionary(Of String, String)
+        flashFreqOptions.Add("64", "64MHz") ' Default for ESP32H2 per Main.txt
+        flashFreqOptions.Add("16", "16MHz")
+        menuOptions.Add("FlashFreq", flashFreqOptions)
+
+        ' Partition Scheme options - extensive list per Main.txt
+        Dim partitionOptions As New Dictionary(Of String, String)
+        partitionOptions.Add("default", "Default 4MB with spiffs (1.2MB APP/1.5MB SPIFFS)")
+        partitionOptions.Add("defaultffat", "Default 4MB with ffat (1.2MB APP/1.5MB FATFS)")
+        partitionOptions.Add("default_8MB", "8M with spiffs (3MB APP/1.5MB SPIFFS)")
+        partitionOptions.Add("minimal", "Minimal (1.3MB APP/700KB SPIFFS)")
+        partitionOptions.Add("no_ota", "No OTA (2MB APP/2MB SPIFFS)")
+        partitionOptions.Add("noota_3g", "No OTA (1MB APP/3MB SPIFFS)")
+        partitionOptions.Add("noota_ffat", "No OTA (2MB APP/2MB FATFS)")
+        partitionOptions.Add("noota_3gffat", "No OTA (1MB APP/3MB FATFS)")
+        partitionOptions.Add("huge_app", "Huge APP (3MB No OTA/1MB SPIFFS)")
+        partitionOptions.Add("min_spiffs", "Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)")
+        partitionOptions.Add("fatflash", "16M Flash (2MB APP/12.5MB FATFS)")
+        partitionOptions.Add("rainmaker", "RainMaker 4MB")
+        partitionOptions.Add("rainmaker_4MB", "RainMaker 4MB No OTA")
+        partitionOptions.Add("rainmaker_8MB", "RainMaker 8MB")
+        partitionOptions.Add("zigbee_zczr", "Zigbee ZCZR 4MB with spiffs")
+        partitionOptions.Add("zigbee_zczr_8MB", "Zigbee ZCZR 8MB with spiffs")
+        partitionOptions.Add("custom", "Custom")
+        menuOptions.Add("PartitionScheme", partitionOptions)
+
+        ' Upload Speed options per Main.txt
+        Dim uploadSpeedOptions As New Dictionary(Of String, String)
+        uploadSpeedOptions.Add("921600", "921600")
+        uploadSpeedOptions.Add("512000", "512000")
+        uploadSpeedOptions.Add("460800", "460800")
+        uploadSpeedOptions.Add("256000", "256000")
+        uploadSpeedOptions.Add("230400", "230400")
+        uploadSpeedOptions.Add("115200", "115200")
+        menuOptions.Add("UploadSpeed", uploadSpeedOptions)
+
+        ' Debug Level options
+        Dim debugOptions As New Dictionary(Of String, String)
+        debugOptions.Add("none", "None")
+        debugOptions.Add("error", "Error")
+        debugOptions.Add("warn", "Warning")
+        debugOptions.Add("info", "Info")
+        debugOptions.Add("debug", "Debug")
+        debugOptions.Add("verbose", "Verbose")
+        menuOptions.Add("DebugLevel", debugOptions)
+
+        ' CDC options
+        Dim cdcOnBootOptions As New Dictionary(Of String, String)
+        cdcOnBootOptions.Add("default", "Disabled")
+        cdcOnBootOptions.Add("cdc", "Enabled")
+        menuOptions.Add("CDCOnBoot", cdcOnBootOptions)
+
+        ' Erase Flash options per Main.txt
+        Dim eraseFlashOptions As New Dictionary(Of String, String)
+        eraseFlashOptions.Add("none", "Disabled")
+        eraseFlashOptions.Add("all", "Enabled")
+        menuOptions.Add("EraseFlash", eraseFlashOptions)
+
+        ' JTAG options
+        Dim jtagAdapterOptions As New Dictionary(Of String, String)
+        jtagAdapterOptions.Add("default", "Disabled")
+        jtagAdapterOptions.Add("builtin", "Integrated USB JTAG")
+        jtagAdapterOptions.Add("external", "FTDI Adapter")
+        jtagAdapterOptions.Add("bridge", "ESP USB Bridge")
+        menuOptions.Add("JTAGAdapter", jtagAdapterOptions)
+
+
+        'Zigbee optionns
+        Dim zigbeeModeOptions As New Dictionary(Of String, String)
+        zigbeeModeOptions.Add("default", "Disabled")
+        zigbeeModeOptions.Add("ed", "Zigbee ED (end device)")
+        zigbeeModeOptions.Add("zczr", "Zigbee ZCZR (coordinator/router)")
+        zigbeeModeOptions.Add("ed_debug", "Zigbee ED (end device) - Debug")
+        zigbeeModeOptions.Add("zczr_debug", "Zigbee ZCZR (coordinator/router) - Debug")
+        menuOptions.Add("ZigbeeMode", zigbeeModeOptions)
 
         Return menuOptions
+
     End Function
 
     ' Create menu options for ESP32-C5 boards
@@ -1711,10 +1875,123 @@ Public Class BoardManager
 
     ' Create menu options for ESP32-P4 boards
     Private Function CreateP4MenuOptions() As Dictionary(Of String, Dictionary(Of String, String))
-        Dim menuOptions = CreateDefaultMenuOptions()
+        Dim menuOptions As New Dictionary(Of String, Dictionary(Of String, String))
 
-        ' Remove FlashFreq as it's not compatible with P4
-        menuOptions.Remove("FlashFreq")
+        ' CPU Frequency options
+        Dim cpuFreqOptions As New Dictionary(Of String, String)
+        cpuFreqOptions.Add("360", "360MHz")
+        cpuFreqOptions.Add("40", "40MHz")
+        menuOptions.Add("CPUFreq", cpuFreqOptions)
+
+        Dim flashSizeOptions As New Dictionary(Of String, String)
+        flashSizeOptions.Add("4M", "4MB (32Mb)")
+        flashSizeOptions.Add("8M", "8MB (64Mb)")
+        flashSizeOptions.Add("2M", "2MB (16Mb)")
+        flashSizeOptions.Add("16M", "16MB (128Mb)")
+        flashSizeOptions.Add("32M", "32MB (256Mb)")
+        menuOptions.Add("FlashSize", flashSizeOptions)
+
+        ' Flash Mode options - includes QIO and DIO per Main.txt
+        Dim flashModeOptions As New Dictionary(Of String, String)
+        flashModeOptions.Add("qio", "QIO")
+        flashModeOptions.Add("dio", "DIO")
+        menuOptions.Add("FlashMode", flashModeOptions)
+
+        ' Flash Frequency options - per Main.txt, default 40MHz for Wrover Kit
+        Dim flashFreqOptions As New Dictionary(Of String, String)
+        flashFreqOptions.Add("80", "80MHz") ' Default for ESP32H2 per Main.txt
+        flashFreqOptions.Add("40", "40MHz")
+        menuOptions.Add("FlashFreq", flashFreqOptions)
+
+        ' Partition Scheme options - extensive list per Main.txt
+        Dim partitionOptions As New Dictionary(Of String, String)
+        partitionOptions.Add("default", "Default 4MB with spiffs (1.2MB APP/1.5MB SPIFFS)")
+        partitionOptions.Add("defaultffat", "Default 4MB with ffat (1.2MB APP/1.5MB FATFS)")
+        partitionOptions.Add("default_8MB", "8M with spiffs (3MB APP/1.5MB SPIFFS)")
+        partitionOptions.Add("minimal", "Minimal (1.3MB APP/700KB SPIFFS)")
+        partitionOptions.Add("no_ota", "No OTA (2MB APP/2MB SPIFFS)")
+        partitionOptions.Add("noota_3g", "No OTA (1MB APP/3MB SPIFFS)")
+        partitionOptions.Add("noota_ffat", "No OTA (2MB APP/2MB FATFS)")
+        partitionOptions.Add("noota_3gffat", "No OTA (1MB APP/3MB FATFS)")
+        partitionOptions.Add("huge_app", "Huge APP (3MB No OTA/1MB SPIFFS)")
+        partitionOptions.Add("min_spiffs", "Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)")
+        partitionOptions.Add("fatflash", "16M Flash (2MB APP/12.5MB FATFS)")
+        partitionOptions.Add("app3M_fat9M_16MB", "16M Flash (3MB APP/9.9MB FATFS)")
+        partitionOptions.Add("app5M_fat24M_32MB", "32M Flash (4.8MB APP/22MB FATFS)")
+        partitionOptions.Add("app5M_little24M_32MB", "32M Flash (4.8MB APP/22MB LittleFS)")
+        partitionOptions.Add("app13M_data7M_32MB", "32M Flash (13MB APP/6.75MB SPIFFS)")
+        partitionOptions.Add("custom", "Custom")
+        menuOptions.Add("PartitionScheme", partitionOptions)
+
+        ' Upload Speed options per Main.txt
+        Dim uploadSpeedOptions As New Dictionary(Of String, String)
+        uploadSpeedOptions.Add("921600", "921600")
+        uploadSpeedOptions.Add("512000", "512000")
+        uploadSpeedOptions.Add("460800", "460800")
+        uploadSpeedOptions.Add("256000", "256000")
+        uploadSpeedOptions.Add("230400", "230400")
+        uploadSpeedOptions.Add("115200", "115200")
+        menuOptions.Add("UploadSpeed", uploadSpeedOptions)
+
+        ' Debug Level options
+        Dim debugOptions As New Dictionary(Of String, String)
+        debugOptions.Add("none", "None")
+        debugOptions.Add("error", "Error")
+        debugOptions.Add("warn", "Warning")
+        debugOptions.Add("info", "Info")
+        debugOptions.Add("debug", "Debug")
+        debugOptions.Add("verbose", "Verbose")
+        menuOptions.Add("DebugLevel", debugOptions)
+
+        ' PSRAM options
+        Dim psramOptions As New Dictionary(Of String, String)
+        psramOptions.Add("disabled", "Disabled")
+        psramOptions.Add("enabled", "Enabled")
+        menuOptions.Add("PSRAM", psramOptions)
+
+        ' CDC options
+        Dim cdcOnBootOptions As New Dictionary(Of String, String)
+        cdcOnBootOptions.Add("default", "Disabled")
+        cdcOnBootOptions.Add("cdc", "Enabled")
+        menuOptions.Add("CDCOnBoot", cdcOnBootOptions)
+
+        ' MSC options
+        Dim mscOnBootOptions As New Dictionary(Of String, String)
+        mscOnBootOptions.Add("default", "Disabled")
+        mscOnBootOptions.Add("msc", "Enabled (Requires USB-OTG Mode)")
+        menuOptions.Add("MSCOnBoot", mscOnBootOptions)
+
+        ' DFU options
+        Dim dfuOnBootOptions As New Dictionary(Of String, String)
+        dfuOnBootOptions.Add("default", "Disabled")
+        dfuOnBootOptions.Add("dfu", "Enabled (Requires USB-OTG Mode)")
+        menuOptions.Add("DFUOnBoot", dfuOnBootOptions)
+
+        ' USB options
+        Dim usbModeOptions As New Dictionary(Of String, String)
+        usbModeOptions.Add("hwcdc", "Hardware CDC and JTAG")
+        usbModeOptions.Add("default", "USB-OTG (TinyUSB)")
+        menuOptions.Add("USBMode", usbModeOptions)
+
+        ' Upload Mode options
+        Dim uploadModeOptions As New Dictionary(Of String, String)
+        uploadModeOptions.Add("default", "UART0 / Hardware CDC")
+        uploadModeOptions.Add("cdc", "USB-OTG CDC (TinyUSB)")
+        menuOptions.Add("UploadMode", uploadModeOptions)
+
+        ' Erase Flash options per Main.txt
+        Dim eraseFlashOptions As New Dictionary(Of String, String)
+        eraseFlashOptions.Add("none", "Disabled")
+        eraseFlashOptions.Add("all", "Enabled")
+        menuOptions.Add("EraseFlash", eraseFlashOptions)
+
+        ' JTAG options
+        Dim jtagAdapterOptions As New Dictionary(Of String, String)
+        jtagAdapterOptions.Add("default", "Disabled")
+        jtagAdapterOptions.Add("builtin", "Integrated USB JTAG")
+        jtagAdapterOptions.Add("external", "FTDI Adapter")
+        jtagAdapterOptions.Add("bridge", "ESP USB Bridge")
+        menuOptions.Add("JTAGAdapter", jtagAdapterOptions)
 
         Return menuOptions
     End Function
@@ -1900,7 +2177,6 @@ Public Class BoardManager
         parameters("menu.PSRAM.enabled") = "QSPI PSRAM"
         parameters("menu.PSRAM.opi") = "OPI PSRAM"
 
-
         parameters("menu.FlashMode") = "Flash Mode"
         parameters("menu.FlashMode.qio") = "QIO 80MHz"
         parameters("menu.FlashMode.dio") = "DIO 80MHz"
@@ -1937,60 +2213,102 @@ Public Class BoardManager
         Return parameters
     End Function
 
-    ' Create parameters for ESP32-C2 boards
-    Private Function CreateC2BoardParameters() As Dictionary(Of String, String)
-        Dim parameters = CreateDefaultBoardParameters()
-
-        ' Remove Flash Frequency as it's not compatible with C2
-        parameters.Remove("menu.FlashFreq")
-        parameters.Remove("menu.FlashFreq.80")
-        parameters.Remove("menu.FlashFreq.40")
-        parameters.Remove("menu.FlashFreq.20")
-
-        ' Replace CPU Frequencies for C2
-        parameters.Remove("menu.CPUFreq.240")
-        parameters.Remove("menu.CPUFreq.160")
-        parameters.Remove("menu.CPUFreq.80")
-        parameters.Remove("menu.CPUFreq.40")
-        parameters.Remove("menu.CPUFreq.20")
-        parameters.Remove("menu.CPUFreq.10")
-
-        parameters("menu.CPUFreq.120") = "120MHz"
-        parameters("menu.CPUFreq.96") = "96MHz"
-        parameters("menu.CPUFreq.80") = "80MHz"
-        parameters("menu.CPUFreq.60") = "60MHz"
-        parameters("menu.CPUFreq.48") = "48MHz"
-        parameters("menu.CPUFreq.40") = "40MHz"
-        parameters("menu.CPUFreq.26") = "26MHz"
-        parameters("menu.CPUFreq.20") = "20MHz"
-        parameters("menu.CPUFreq.10") = "10MHz"
-
-        Return parameters
-    End Function
 
     ' Create parameters for ESP32-C3 boards
     Private Function CreateC3BoardParameters() As Dictionary(Of String, String)
         Dim parameters = CreateDefaultBoardParameters()
 
-        ' Remove Flash Frequency as it's not compatible with C3
-        parameters.Remove("menu.FlashFreq")
-        parameters.Remove("menu.FlashFreq.80")
-        parameters.Remove("menu.FlashFreq.40")
-        parameters.Remove("menu.FlashFreq.20")
+        ' Common menu parameters
+        parameters("menu.UploadSpeed") = "Upload Speed"
+        parameters("menu.CPUFreq") = "CPU Frequency"
+        parameters("menu.FlashFreq") = "Flash Frequency"
+        parameters("menu.FlashMode") = "Flash Mode"
+        parameters("menu.FlashSize") = "FlashSize"
+        parameters("menu.PartitionScheme") = "Partition Scheme"
+        parameters("menu.DebugLevel") = "Debug Level"
+        parameters("menu.EraseFlash") = "Erase Flash"
+        parameters("menu.CDCOnBoot") = "CDC On Boot"
+        parameters("menu.JTAGAdapter") = "JTAG Adapter"
+        parameters("menu.ZigbeeMode") = "Zigbee Mode"
 
-        ' Replace CPU Frequencies for C3
-        parameters.Remove("menu.CPUFreq.240")
-        parameters.Remove("menu.CPUFreq.160")
-        parameters.Remove("menu.CPUFreq.80")
-        parameters.Remove("menu.CPUFreq.40")
-        parameters.Remove("menu.CPUFreq.20")
-        parameters.Remove("menu.CPUFreq.10")
+        ' Default values
+        parameters("menu.UploadSpeed.921600") = "921600"
+        parameters("menu.UploadSpeed.512000") = "512000"
+        parameters("menu.UploadSpeed.460800") = "460800"
+        parameters("menu.UploadSpeed.230400") = "230400"
+        parameters("menu.UploadSpeed.115200") = "115200"
 
-        parameters("menu.CPUFreq.160") = "160MHz"
-        parameters("menu.CPUFreq.80") = "80MHz"
+
+        parameters("menu.CPUFreq.160") = "160MHz (WiFi)"
+        parameters("menu.CPUFreq.80") = "80MHz (WiFi)"
         parameters("menu.CPUFreq.40") = "40MHz"
         parameters("menu.CPUFreq.20") = "20MHz"
-        parameters("menu.CPUFreq.10") = "10MHz"
+        parameters("menu.CPUFreq.10") = "10MHz)"
+
+        parameters("menu.FlashFreq.80") = "80MHz"
+        parameters("menu.FlashFreq.40") = "40MHz"
+
+        parameters("menu.FlashMode.qio") = "QIO"
+        parameters("menu.FlashMode.dio") = "DIO"
+
+        parameters("menu.FlashSize.4M") = "4MB (32Mb)"
+        parameters("menu.FlashSize.8M") = "8MB (64Mb)"
+        parameters("menu.FlashSize.2M") = "2MB (16Mb)"
+        parameters("menu.FlashSize.16M") = "16MB (128Mb)"
+
+        parameters("menu.PartitionScheme.default") = "Default 4MB with spiffs (1.2MB APP/1.5MB SPIFFS)"
+        parameters("menu.PartitionScheme.defaultffat") = "Default 4MB with ffat (1.2MB APP/1.5MB FATFS)"
+        parameters("menu.PartitionScheme.default_8MB") = "8M with spiffs (3MB APP/1.5MB SPIFFS)"
+        parameters("menu.PartitionScheme.minimal") = "Minimal (1.3MB APP/700KB SPIFFS)"
+        parameters("menu.PartitionScheme.no_ota") = "No OTA (2MB APP/2MB SPIFFS)"
+        parameters("menu.PartitionScheme.noota_3g") = "No OTA (1MB APP/3MB SPIFFS)"
+        parameters("menu.PartitionScheme.noota_ffat") = "No OTA (2MB APP/2MB FATFS)"
+        parameters("menu.PartitionScheme.noota_3gffat") = "No OTA (1MB APP/3MB FATFS)"
+        parameters("menu.PartitionScheme.huge_app") = "Huge APP (3MB No OTA/1MB SPIFFS)"
+        parameters("menu.PartitionScheme.min_spiffs") = "Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)"
+        parameters("menu.PartitionScheme.fatflash") = "16M Flash (2MB APP/12.5MB FATFS)"
+        parameters("menu.PartitionScheme.rainmaker") = "RainMaker 4MB"
+        parameters("menu.PartitionScheme.rainmaker_4MB") = "RainMaker 4MB No OTA"
+        parameters("menu.PartitionScheme.rainmaker_8MB") = "RainMaker 8MB"
+        parameters("menu.PartitionScheme.zigbee_zczr") = "Zigbee ZCZR 4MB with spiffs"
+        parameters("menu.PartitionScheme.zigbee_zczr_8MB") = "Zigbee ZCZR 8MB with spiffs"
+        parameters("menu.PartitionScheme.custom") = "Custom"
+
+
+
+        parameters("menu.DebugLevel.none") = "None"
+        parameters("menu.DebugLevel.error") = "Error"
+        parameters("menu.DebugLevel.warn") = "Warning"
+        parameters("menu.DebugLevel.info") = "Info"
+        parameters("menu.DebugLevel.debug") = "Debug"
+        parameters("menu.DebugLevel.verbose") = "Verbose"
+
+        parameters("menu.EraseFlash.none") = "None"
+        parameters("menu.EraseFlash.all") = "All"
+
+        ' ADD MISSING DEFAULT BOARD PARAMETERS - JTAGAdapter
+        parameters("menu.JTAGAdapter.default") = "Disabled"
+        parameters("menu.JTAGAdapter.builtin") = "Integrated USB JTAG"
+        parameters("menu.JTAGAdapter.external") = "FTDI Adapter"
+        parameters("menu.JTAGAdapter.bridge") = "ESP USB Bridge"
+
+        parameters("menu.CDCOnBoot.default") = "Disabled"
+        parameters("menu.CDCOnBoot.cdc") = "Enabled"
+
+        ' ADD MISSING DEFAULT BOARD PARAMETERS - ZigbeeMode
+        parameters("menu.ZigbeeMode.default") = "Disabled"
+        parameters("menu.ZigbeeMode.zczr") = "Zigbee ZCZR (coordinator/router)"
+
+        ' Add special esp32c3 information
+        parameters("build.board") = "ESP32C3_DEV"
+        parameters("build.variants_dir") = "variants"
+        parameters("build.variant") = "esp32c3"
+        parameters("build.has_psram") = "false" ' esp32c3 has no PSRAM built-in
+        parameters("build.f_cpu") = "160000000L" ' esp32c3 fixed at 160MHz
+        parameters("build.flash_size") = "4MB" ' esp32c3 fixed at 4MB
+        parameters("build.flash_freq") = "80m" ' Default flash frequency for esp32c3
+        parameters("build.flash_mode") = "qio" ' esp32c3 fixed at qio
+
 
         Return parameters
     End Function
@@ -2002,27 +2320,93 @@ Public Class BoardManager
 
     ' Create parameters for ESP32-H2 boards
     Private Function CreateH2BoardParameters() As Dictionary(Of String, String)
-        Dim parameters = CreateDefaultBoardParameters()
+        Dim parameters As New Dictionary(Of String, String)()
 
-        ' Remove Flash Frequency as it's not compatible with H2
-        parameters.Remove("menu.FlashFreq")
-        parameters.Remove("menu.FlashFreq.80")
-        parameters.Remove("menu.FlashFreq.40")
-        parameters.Remove("menu.FlashFreq.20")
+        ' Common menu parameters
+        parameters("menu.UploadSpeed") = "Upload Speed"
+        parameters("menu.FlashFreq") = "Flash Frequency"
+        parameters("menu.FlashMode") = "Flash Mode"
+        parameters("menu.FlashSize") = "FlashSize"
+        parameters("menu.PartitionScheme") = "Partition Scheme"
+        parameters("menu.DebugLevel") = "Debug Level"
+        parameters("menu.EraseFlash") = "Erase Flash"
+        parameters("menu.CDCOnBoot") = "CDC On Boot"
+        parameters("menu.JTAGAdapter") = "JTAG Adapter"
+        parameters("menu.ZigbeeMode") = "Zigbee Mode"
 
-        ' Replace CPU Frequencies for H2
-        parameters.Remove("menu.CPUFreq.240")
-        parameters.Remove("menu.CPUFreq.160")
-        parameters.Remove("menu.CPUFreq.80")
-        parameters.Remove("menu.CPUFreq.40")
-        parameters.Remove("menu.CPUFreq.20")
-        parameters.Remove("menu.CPUFreq.10")
+        ' Default values
+        parameters("menu.UploadSpeed.921600") = "921600"
+        parameters("menu.UploadSpeed.512000") = "512000"
+        parameters("menu.UploadSpeed.460800") = "460800"
+        parameters("menu.UploadSpeed.230400") = "230400"
+        parameters("menu.UploadSpeed.115200") = "115200"
 
-        parameters("menu.CPUFreq.96") = "96MHz"
-        parameters("menu.CPUFreq.48") = "48MHz"
-        parameters("menu.CPUFreq.32") = "32MHz"
-        parameters("menu.CPUFreq.16") = "16MHz"
-        parameters("menu.CPUFreq.8") = "8MHz"
+
+        parameters("menu.FlashFreq.64") = "64MHz"
+        parameters("menu.FlashFreq.16") = "16MHz"
+
+        parameters("menu.FlashMode.qio") = "QIO"
+        parameters("menu.FlashMode.dio") = "DIO"
+
+        parameters("menu.FlashSize.4M") = "4MB (32Mb)"
+        parameters("menu.FlashSize.8M") = "8MB (64Mb)"
+        parameters("menu.FlashSize.2M") = "2MB (16Mb)"
+        parameters("menu.FlashSize.16M") = "16MB (128Mb)"
+
+        parameters("menu.PartitionScheme.default") = "Default 4MB with spiffs (1.2MB APP/1.5MB SPIFFS)"
+        parameters("menu.PartitionScheme.defaultffat") = "Default 4MB with ffat (1.2MB APP/1.5MB FATFS)"
+        parameters("menu.PartitionScheme.default_8MB") = "8M with spiffs (3MB APP/1.5MB SPIFFS)"
+        parameters("menu.PartitionScheme.minimal") = "Minimal (1.3MB APP/700KB SPIFFS)"
+        parameters("menu.PartitionScheme.no_ota") = "No OTA (2MB APP/2MB SPIFFS)"
+        parameters("menu.PartitionScheme.noota_3g") = "No OTA (1MB APP/3MB SPIFFS)"
+        parameters("menu.PartitionScheme.noota_ffat") = "No OTA (2MB APP/2MB FATFS)"
+        parameters("menu.PartitionScheme.noota_3gffat") = "No OTA (1MB APP/3MB FATFS)"
+        parameters("menu.PartitionScheme.huge_app") = "Huge APP (3MB No OTA/1MB SPIFFS)"
+        parameters("menu.PartitionScheme.min_spiffs") = "Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)"
+        parameters("menu.PartitionScheme.fatflash") = "16M Flash (2MB APP/12.5MB FATFS)"
+        parameters("menu.PartitionScheme.rainmaker") = "RainMaker 4MB"
+        parameters("menu.PartitionScheme.rainmaker_4MB") = "RainMaker 4MB No OTA"
+        parameters("menu.PartitionScheme.rainmaker_8MB") = "RainMaker 8MB"
+        parameters("menu.PartitionScheme.zigbee_zczr") = "Zigbee ZCZR 4MB with spiffs"
+        parameters("menu.PartitionScheme.zigbee_zczr_8MB") = "Zigbee ZCZR 8MB with spiffs"
+        parameters("menu.PartitionScheme.custom") = "Custom"
+
+        parameters("menu.DebugLevel.none") = "None"
+        parameters("menu.DebugLevel.error") = "Error"
+        parameters("menu.DebugLevel.warn") = "Warning"
+        parameters("menu.DebugLevel.info") = "Info"
+        parameters("menu.DebugLevel.debug") = "Debug"
+        parameters("menu.DebugLevel.verbose") = "Verbose"
+
+        parameters("menu.EraseFlash.none") = "None"
+        parameters("menu.EraseFlash.all") = "All"
+
+        ' ADD MISSING DEFAULT BOARD PARAMETERS - JTAGAdapter
+        parameters("menu.JTAGAdapter.default") = "Disabled"
+        parameters("menu.JTAGAdapter.builtin") = "Integrated USB JTAG"
+        parameters("menu.JTAGAdapter.external") = "FTDI Adapter"
+        parameters("menu.JTAGAdapter.bridge") = "ESP USB Bridge"
+
+        parameters("menu.CDCOnBoot.default") = "Disabled"
+        parameters("menu.CDCOnBoot.cdc") = "Enabled"
+
+        ' ADD MISSING DEFAULT BOARD PARAMETERS - ZigbeeMode
+        parameters("menu.ZigbeeMode.default") = "Disabled"
+        parameters("menu.ZigbeeMode.ed") = "Zigbee ED (end device)"
+        parameters("menu.ZigbeeMode.zczr") = "Zigbee ZCZR (coordinator/router)"
+        parameters("menu.ZigbeeMode.ed_debug") = "Zigbee ED (end device) - Debug"
+        parameters("menu.ZigbeeMode.zczr_debug") = "Zigbee ZCZR (coordinator/router) - Debug"
+
+
+        ' Add special esp32c3 information
+        parameters("build.board") = "ESP32H2_DEV"
+        parameters("build.variants_dir") = "variants"
+        parameters("build.variant") = "esp32h2"
+        parameters("build.f_cpu") = "96000000L" ' esp32c3 fixed at 160MHz
+        parameters("build.flash_size") = "4MB" ' esp32c3 fixed at 4MB
+        parameters("build.flash_freq") = "64m" ' Default flash frequency for esp32c3
+        parameters("build.flash_mode") = "qio" ' esp32c3 fixed at qio
+
 
         Return parameters
     End Function
@@ -2035,20 +2419,119 @@ Public Class BoardManager
         parameters.Remove("menu.FlashFreq")
         parameters.Remove("menu.FlashFreq.80")
         parameters.Remove("menu.FlashFreq.40")
-        parameters.Remove("menu.FlashFreq.20")
+
 
         Return parameters
     End Function
 
     ' Create parameters for ESP32-P4 boards
     Private Function CreateP4BoardParameters() As Dictionary(Of String, String)
-        Dim parameters = CreateDefaultBoardParameters()
+        Dim parameters As New Dictionary(Of String, String)()
 
-        ' Remove Flash Frequency as it's not compatible with P4
-        parameters.Remove("menu.FlashFreq")
-        parameters.Remove("menu.FlashFreq.80")
-        parameters.Remove("menu.FlashFreq.40")
-        parameters.Remove("menu.FlashFreq.20")
+        ' Common menu parameters
+        parameters("menu.UploadSpeed") = "Upload Speed"
+        parameters("menu.CPUFreq") = "CPU Frequency"
+        parameters("menu.FlashFreq") = "Flash Frequency"
+        parameters("menu.FlashMode") = "Flash Mode"
+        parameters("menu.FlashSize") = "FlashSize"
+        parameters("menu.PartitionScheme") = "Partition Scheme"
+        parameters("menu.PSRAM") = "PSRAM"
+        parameters("menu.DebugLevel") = "Debug Level"
+        parameters("menu.EraseFlash") = "Erase Flash"
+        parameters("menu.JTAGAdapter") = "JTAG Adapter"
+        parameters("menu.ZigbeeMode") = "Zigbee Mode"
+
+        ' Default values
+        parameters("menu.UploadSpeed.921600") = "921600"
+        parameters("menu.UploadSpeed.512000") = "512000"
+        parameters("menu.UploadSpeed.460800") = "460800"
+        parameters("menu.UploadSpeed.230400") = "230400"
+        parameters("menu.UploadSpeed.115200") = "115200"
+
+
+        parameters("menu.CPUFreq.360") = "360MHz"
+        parameters("menu.CPUFreq.40") = "40MHz"
+
+
+        parameters("menu.FlashFreq.80") = "80MHz"
+        parameters("menu.FlashFreq.40") = "40MHz"
+
+        parameters("menu.FlashMode.qio") = "QIO"
+        parameters("menu.FlashMode.dio") = "DIO"
+
+        parameters("menu.FlashSize.4M") = "4MB (32Mb)"
+        parameters("menu.FlashSize.8M") = "8MB (64Mb)"
+        parameters("menu.FlashSize.2M") = "2MB (16Mb)"
+        parameters("menu.FlashSize.16M") = "16MB (128Mb)"
+        parameters("menu.FlashSize.32M") = "32MB (256Mb)"
+
+
+        parameters("menu.PartitionScheme.default") = "Default 4MB with spiffs (1.2MB APP/1.5MB SPIFFS)"
+        parameters("menu.PartitionScheme.defaultffat") = "Default 4MB with ffat (1.2MB APP/1.5MB FATFS)"
+        parameters("menu.PartitionScheme.default_8MB") = "8M with spiffs (3MB APP/1.5MB SPIFFS)"
+        parameters("menu.PartitionScheme.minimal") = "Minimal (1.3MB APP/700KB SPIFFS)"
+        parameters("menu.PartitionScheme.no_ota") = "No OTA (2MB APP/2MB SPIFFS)"
+        parameters("menu.PartitionScheme.noota_3g") = "No OTA (1MB APP/3MB SPIFFS)"
+        parameters("menu.PartitionScheme.noota_ffat") = "No OTA (2MB APP/2MB FATFS)"
+        parameters("menu.PartitionScheme.noota_3gffat") = "No OTA (1MB APP/3MB FATFS)"
+        parameters("menu.PartitionScheme.huge_app") = "Huge APP (3MB No OTA/1MB SPIFFS)"
+        parameters("menu.PartitionScheme.min_spiffs") = "Minimal SPIFFS (1.9MB APP with OTA/190KB SPIFFS)"
+        parameters("menu.PartitionScheme.fatflash") = "16M Flash (2MB APP/12.5MB FATFS)"
+        parameters("menu.PartitionScheme.app3M_fat9M_16MB") = "16M Flash (3MB APP/9.9MB FATFS)"
+        parameters("menu.PartitionScheme.app5M_fat24M_32MB") = "32M Flash (4.8MB APP/22MB FATFS)"
+        parameters("menu.PartitionScheme.app5M_little24M_32MB") = "32M Flash (4.8MB APP/22MB LittleFS)"
+        parameters("menu.PartitionScheme.app13M_data7M_32MB") = "32M Flash (13MB APP/6.75MB SPIFFS)"
+        parameters("menu.PartitionScheme.custom") = "Custom"
+
+        parameters("menu.DebugLevel.none") = "None"
+        parameters("menu.DebugLevel.error") = "Error"
+        parameters("menu.DebugLevel.warn") = "Warning"
+        parameters("menu.DebugLevel.info") = "Info"
+        parameters("menu.DebugLevel.debug") = "Debug"
+        parameters("menu.DebugLevel.verbose") = "Verbose"
+
+        parameters("menu.EraseFlash.none") = "None"
+        parameters("menu.EraseFlash.all") = "All"
+
+        ' ADD MISSING DEFAULT BOARD PARAMETERS - JTAGAdapter
+        parameters("menu.JTAGAdapter.default") = "Disabled"
+        parameters("menu.JTAGAdapter.builtin") = "Integrated USB JTAG"
+        parameters("menu.JTAGAdapter.external") = "FTDI Adapter"
+        parameters("menu.JTAGAdapter.bridge") = "ESP USB Bridge"
+
+        parameters("menu.PSRAM.disabled") = "Disabled"
+        parameters("menu.PSRAM.enabled") = "Enabled"
+
+        parameters("menu.USBMode") = "USB Mode"
+        parameters("menu.USBMode.hwcdc") = "Hardware CDC and JTAG"
+        parameters("menu.USBMode.default") = "USB-OTG (TinyUSB)"
+
+        parameters("menu.CDCOnBoot") = "CDC On Boot"
+        parameters("menu.CDCOnBoot.default") = "Disabled"
+        parameters("menu.CDCOnBoot.cdc") = "Enabled"
+
+        parameters("menu.MSCOnBoot") = "MSC On Boot"
+        parameters("menu.MSCOnBoot.default") = "Disabled"
+        parameters("menu.MSCOnBoot.msc") = "Enabled (Requires USB-OTG Mode)"
+
+        parameters("menu.DFUOnBoot") = "DFU On Boot"
+        parameters("menu.DFUOnBoot.default") = "Disabled"
+        parameters("menu.DFUOnBoot.dfu") = "Enabled (Requires USB-OTG Mode)"
+
+        parameters("menu.UploadMode") = "Upload Mode"
+        parameters("menu.UploadMode.default") = "UART0 / Hardware CDC"
+        parameters("menu.UploadMode.cdc") = "USB-OTG CDC (TinyUSB)"
+
+
+        ' Add special esp32p4 information
+        parameters("build.board") = "ESP32P4_DEV"
+        parameters("build.variants_dir") = "variants"
+        parameters("build.variant") = "esp32p4"
+        parameters("build.f_cpu") = "360000000L" ' esp32p4 fixed at 160MHz
+        parameters("build.flash_size") = "4MB" ' esp32p4 fixed at 4MB
+        parameters("build.flash_freq") = "80m" ' Default flash frequency for esp32p4
+        parameters("build.flash_mode") = "qio" ' esp32p4 fixed at qio
+
 
         Return parameters
     End Function
@@ -2101,12 +2584,11 @@ Public Class BoardManager
 
         ' Only add default values for menus that are supported by this board and not explicitly unsupported
         If supportedMenus.Contains("CPUFreq") AndAlso Not unsupportedMenus.Contains("CPUFreq") Then
-            If boardId.Contains("esp32c2") Then
-                parameters("CPUFreq") = "120"
-            ElseIf boardId.Contains("esp32c3") OrElse boardId.Contains("esp32c6") Then
+
+            If boardId.Contains("esp32c3") OrElse boardId.Contains("esp32c6") Then
                 parameters("CPUFreq") = "160"
             ElseIf boardId.Contains("esp32h2") Then
-                parameters("CPUFreq") = "96"
+                parameters.Remove("CPUFreq")
             Else
                 parameters("CPUFreq") = "240"
             End If
@@ -2128,9 +2610,13 @@ Public Class BoardManager
             ' Special handling for esp32wroverkit - use 40MHz default
             If boardId = "esp32wroverkit" Then
                 parameters("FlashFreq") = "40" ' Default for Wrover Kit per Main.txt
+            ElseIf boardId = "esp32h2" Then
+                parameters("FlashFreq") = "64"
             Else
-                parameters("FlashFreq") = "80"
+                    parameters("FlashFreq") = "80"
             End If
+
+
         End If
 
         ' ADD DEFAULT PARAMETERS FOR MISSING SETTINGS
@@ -2188,7 +2674,7 @@ Public Class BoardManager
             If supportedMenus.Contains("EventsCore") Then parameters("EventsCore") = "1"
             If supportedMenus.Contains("JTAGAdapter") Then parameters("JTAGAdapter") = "default"
         ElseIf boardId.Contains("esp32s2") Then
-            If supportedMenus.Contains("USBMode") Then parameters("USBMode") = "hwcdc"
+            'If supportedMenus.Contains("USBMode") Then parameters("USBMode") = "hwcdc"
             If supportedMenus.Contains("CDCOnBoot") Then parameters("CDCOnBoot") = "default"
             If supportedMenus.Contains("MSCOnBoot") Then parameters("MSCOnBoot") = "default"
             If supportedMenus.Contains("DFUOnBoot") Then parameters("DFUOnBoot") = "default"
@@ -2328,18 +2814,10 @@ Public Class BoardManager
 
         Select Case parameterName
             Case "CPUFreq"
-                If boardId.Contains("esp32c2") Then
-                    options.Add("120", "120MHz")
-                    options.Add("80", "80MHz")
+                If boardId.Contains("esp32c3") OrElse boardId.Contains("esp32c6") Then
+                        options.Add("160", "160MHz")
+                        options.Add("80", "80MHz")
                     options.Add("40", "40MHz")
-                ElseIf boardId.Contains("esp32c3") OrElse boardId.Contains("esp32c6") Then
-                    options.Add("160", "160MHz")
-                    options.Add("80", "80MHz")
-                    options.Add("40", "40MHz")
-                ElseIf boardId.Contains("esp32h2") Then
-                    options.Add("96", "96MHz")
-                    options.Add("48", "48MHz")
-                    options.Add("24", "24MHz")
                 Else
                     options.Add("240", "240MHz (WiFi/BT)")
                     options.Add("160", "160MHz (WiFi/BT)")
@@ -2352,8 +2830,18 @@ Public Class BoardManager
                 options.Add("dio", "DIO")
 
             Case "FlashFreq"
-                options.Add("80", "80MHz")
-                options.Add("40", "40MHz")
+                If boardId.Contains("esp32h2") Then
+                    options.Add("64", "64MHz")
+                    options.Add("32", "32MHz")
+                    options.Add("16", "16MHz")
+                Else
+                    options.Add("80", "80MHz")
+                    options.Add("40", "40MHz")
+
+                End If
+
+
+
 
             Case "PartitionScheme"
                 options.Add("default", "Default 4MB with spiffs (1.2MB APP/1.5MB SPIFFS)")
